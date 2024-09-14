@@ -1,0 +1,6 @@
+.env
+venv
+ffmpeg
+!ffmpeg/.gitkeep
+models
+!models/.gitkeep

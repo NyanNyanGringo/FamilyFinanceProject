@@ -1,0 +1,24 @@
+[tool.poetry]
+name = "familyfinanceproject"
+version = "0.1.0"
+description = "Server for 'FamilyFinanceProject (Google Tables)' that provides creating incomes/outcomes/transfers/adjustments using Telegram audio or text messages"
+authors = ["NyanNyanGringo <vap-yar2@mail.ru>"]
+license = "Proprietary"
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.10"
+python-dotenv = "^1.0.1"
+python-telegram-bot = "^21.5"
+openai = "^1.45.0"
+vosk = "^0.3.45"
+google-api-python-client = "^2.145.0"
+google-auth-httplib2 = "^0.2.0"
+google-auth-oauthlib = "^1.2.1"
+gspread = "^6.1.2"
+
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
