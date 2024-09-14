@@ -1,4 +1,7 @@
 import os
+
+import enum
+
 from config import VOSK_MODEL
 
 
@@ -25,6 +28,15 @@ def get_vosk_model_path() -> str:
         raise FileNotFoundError(f"Модель не найдена: {vosk_model_path}")
 
     return vosk_model_path
+
+
+class GoogleAuthType(enum.Enum):
+    CREDENTIALS = "credentials.json"
+    TOKEN = "token.json"
+
+
+def get_google_filepath(auth_type: GoogleAuthType) -> str:
+    return os.path.join(_get_root_path(), "google_credentials", auth_type.value)
 
 
 # private

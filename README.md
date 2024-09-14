@@ -1,7 +1,7 @@
 # FamilyFinanceProject
 
 ###### Python 3.10
-###### Requires API keys from OpenAI, Google Tables and TelegramBot
+###### Requires: OpenAI API-key, Google Tables OAuth 2.0 Client ID and Telegram Bot Token
 
 ### From Author:
 Project for personal goals.  
@@ -38,6 +38,10 @@ Example structure:
 ```
 
 Rename the `.env.example` file to `.env` and specify the required values in it.
+
+Place `credentials.json` file from your Google Cloud Project to google_credentials folder.
+After running app you have to authorize in Google and `token.json` file will be automatically
+created in the same directory.
 
 Place the necessary vosk models in the models folder
 (if you don't plan to use vosk and prefer whisper, skip this step):
