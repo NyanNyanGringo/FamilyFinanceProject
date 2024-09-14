@@ -13,7 +13,7 @@ since access to a Google Sheets custom template for financial management is requ
 
 Clone the repository:
 ```
-git clone https://your-repository-link-here.git
+git clone https://github.com/NyanNyanGringo/FamilyFinanceProject.git
 ```
 
 Install dependencies:
