@@ -7,7 +7,7 @@ from functools import partial
 from telegram import Update
 from telegram.ext import Application, ContextTypes, MessageHandler, filters
 
-from lib.utilities.gpt_utilities import text2text, audio2text
+from lib.utilities.openai_utilities import text2text, audio2text
 from lib.utilities.telegram_utilities import download_voice_message
 from lib.utilities.ffmpeg_utilities import convert_oga_to_wav
 from lib.utilities.vosk_utilities import get_text_from_audio

@@ -88,10 +88,26 @@ _SERVICE = build("sheets", "v4", credentials=_CREDS)
 _SHEETS_IDS = _get_sheet_ids()
 
 
+class _GoogleBaseEnumClass(Enum):
+    def __str__(self):
+        return self.value
+
+    @classmethod
+    def values(cls):
+        return [item.value for item in cls]
+
+    @classmethod
+    def get_item(cls, value: str):
+        for item in cls:
+            if item.value == value:
+                return item
+        raise ValueError(f"{value} is not a valid value for {cls.__name__}")
+
+
 # public
 
 
-class Formulas(str, Enum):
+class Formulas(str, _GoogleBaseEnumClass):
     """Возвращает формулы из Google Tables, которые используются в FamilyFinanceProject"""
 
     # Месяц: 'Расходы'!B3:B | 'Переводы'!B3:B | 'Доходы'!B3:B
@@ -119,33 +135,36 @@ class Formulas(str, Enum):
     main_sum_currency = """=IF($D3<>"", '*config'!$H$5, "?")"""
 
 
-class ListName(str, Enum):
+class ListName(str, _GoogleBaseEnumClass):
     expenses = "Расходы"
     transfers = "Переводы"
     incomes = "Доходы"
 
 
-class Status(str, Enum):
+class Status(str, _GoogleBaseEnumClass):
     committed = "Committed"
     planned = "Planned"
 
 
-class TransferType(str, Enum):
+class TransferType(str, _GoogleBaseEnumClass):
     transfer = "Transfer"
     adjustment = "Adjustment"
 
 
-class ConfigRange(str, Enum):
+class ConfigRange(str, _GoogleBaseEnumClass):
     incomes = "*config!B5:B105"
     expenses = "*config!C5:E105"
+    # expenses_category = "*config!C5:C105"
     currencies = "*config!F5:H105"
     accounts = "*config!I5:K105"
+    # accounts_names = "*config!I5:I105"
 
 
 class RequestData(BaseModel):
     list_name: ListName
     date: int = Field(default_factory=get_google_sheets_current_date)
-    category: str
+    incomes_category: str
+    expenses_category: str
     transfer_type: Optional[TransferType] = None
     account: str
     replenishment_account: Optional[str] = None
@@ -172,14 +191,23 @@ class RequestData(BaseModel):
         return True, message
 
 
-def get_values(cell_range: str or ConfigRange):
+def get_values(cell_range: str or ConfigRange, transform_to_single_list: bool = False) -> list:
     sheet = _SERVICE.spreadsheets()
     result = (
         sheet.values()
         .get(spreadsheetId=SPREADSHEET_ID, range=cell_range)
         .execute()
     )
-    return result.get("values", [])
+    values = result.get("values", [])
+
+    if transform_to_single_list:
+        transformed_list = []
+        for sublist in values:
+            if value := sublist[0]:
+                transformed_list.append(value)
+        return transformed_list
+
+    return values
 
 
 def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) -> dict:
