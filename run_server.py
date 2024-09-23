@@ -19,7 +19,7 @@ if __name__ == "__main__":
 
     load_dotenv()  # load env from .env
 
-    # server.run()
+    server.run()
 
     # tests 1
     # from lib.utilities.google_utilities import RequestData, ListName
@@ -35,9 +35,9 @@ if __name__ == "__main__":
 
 
     # test 2
-    from lib.utilities import openai_utilities
-    from lib.utilities import google_utilities
-
+    # from lib.utilities import openai_utilities
+    # from lib.utilities import google_utilities
+    #
     # pprint.pprint(google_utilities.get_values(google_utilities.ConfigRange.incomes, True))
     # print()
     # pprint.pprint(google_utilities.get_values(google_utilities.ConfigRange.expenses, True))
@@ -46,9 +46,6 @@ if __name__ == "__main__":
     # print()
     # pprint.pprint(google_utilities.get_values(google_utilities.ConfigRange.accounts, True))
     # print()
-    print(openai_utilities._get_response_format())
-
-    openai_utilities.request_data("800 динар хлеб и молоко")
-
-    # TODO: остановились на том, что google_utilities.get_values возвращает вложенные листы. А также пустые ячейки.
-        # Это нужно поправить и после эксперементировать с запросом к ChatGPT API.
+    # print(openai_utilities._get_response_format())
+    #
+    # openai_utilities.request_data("800 динар хлеб и молоко")

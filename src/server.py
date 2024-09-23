@@ -21,7 +21,7 @@ class Audio2TextModels:
 async def add_row_to_google_tables_based_on_the_voice_message(
         update: Update,
         context: ContextTypes.DEFAULT_TYPE,
-        audio2text_model: Audio2TextModels = Audio2TextModels.vosk) -> None:
+        audio2text_model: Audio2TextModels = Audio2TextModels.whisper) -> None:
     """
     1. Принимает update от Telegram в момент отправки пользователем голосового сообщения;
     2. Сохраняет голосовое сообщение в папку voice_messages в формате .oga;
@@ -39,13 +39,14 @@ async def add_row_to_google_tables_based_on_the_voice_message(
     else:
         raw_text = get_text_from_audio(wav_audio_file)
 
-    if not raw_text.strip():
-        await processing_message.edit_text("Не удалось распознать текст.")
+    # if not raw_text.strip():
+    #     await processing_message.edit_text("Не удалось распознать текст.")
+    #
+    # corrected_text = text2text(f"Расставь знаки препинания, исправь грамматические ошибки и структурируй текст. "
+    #                            f"Текст: {raw_text}")
 
-    corrected_text = text2text(f"Расставь знаки препинания, исправь грамматические ошибки и структурируй текст. "
-                               f"Текст: {raw_text}")
-
-    final_message = f"Текст из аудио-файла:\n\n{raw_text}\n\nФинальный текст:\n\n{corrected_text}"
+    # final_message = f"Текст из аудио-файла:\n\n{raw_text}\n\nФинальный текст:\n\n{corrected_text}"
+    final_message = f"{raw_text}"
     await processing_message.edit_text(final_message)
 
 
@@ -55,7 +56,7 @@ def run() -> None:
     # Используем functools.partial для передачи дополнительного аргумента
     handler_with_vosk = partial(
         add_row_to_google_tables_based_on_the_voice_message,
-        audio2text_model=Audio2TextModels.vosk
+        audio2text_model=Audio2TextModels.whisper
     )
 
     # Привязываем обработчики для разных моделей

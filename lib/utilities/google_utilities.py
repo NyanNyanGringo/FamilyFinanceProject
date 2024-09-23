@@ -135,6 +135,13 @@ class Formulas(str, _GoogleBaseEnumClass):
     main_sum_currency = """=IF($D3<>"", '*config'!$H$5, "?")"""
 
 
+class OperationTypes(str, _GoogleBaseEnumClass):
+    expenses = "Расходы"
+    transfers = "Переводы"
+    adjustment = "Корректировка"
+    incomes = "Доходы"
+
+
 class ListName(str, _GoogleBaseEnumClass):
     expenses = "Расходы"
     transfers = "Переводы"
@@ -154,10 +161,8 @@ class TransferType(str, _GoogleBaseEnumClass):
 class ConfigRange(str, _GoogleBaseEnumClass):
     incomes = "*config!B5:B105"
     expenses = "*config!C5:E105"
-    # expenses_category = "*config!C5:C105"
     currencies = "*config!F5:H105"
     accounts = "*config!I5:K105"
-    # accounts_names = "*config!I5:I105"
 
 
 class RequestData(BaseModel):
