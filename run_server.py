@@ -6,7 +6,10 @@ import pprint
 from dotenv import load_dotenv
 
 from src import server
-
+# from dotenv import load_dotenv
+# load_dotenv()
+# import os
+# os.getenv("TELEGRAM_TOKEN")
 
 if __name__ == "__main__":
 
@@ -49,3 +52,15 @@ if __name__ == "__main__":
     # print(openai_utilities._get_response_format())
     #
     # openai_utilities.request_data("800 динар хлеб и молоко")
+
+    # test 3
+    # user_message = "Значит, сделал перевод. Получается, из динары Лиза просто в динары пять тысяч динар. И напиши комментарий, что нужно долг вернуть Лизе."
+    #
+    # from lib.utilities.openai_utilities import request_data, RequestBuilder, ResponseFormat, MessageRequest
+    #
+    # request_data(
+    #     RequestBuilder(
+    #         message_request=MessageRequest(user_message).finance_operation_request_message,
+    #         response_format=ResponseFormat().finance_operation_response
+    #     )
+    # )

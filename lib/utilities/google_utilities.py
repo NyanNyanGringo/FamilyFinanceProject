@@ -15,6 +15,8 @@
 """
 import logging
 import os
+import shutil
+import time
 from enum import Enum
 from typing import Union, Optional
 
@@ -22,7 +24,7 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials
+from google.oauth2.credentials import Credentials, exceptions
 from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 
@@ -44,6 +46,7 @@ SPREADSHEET_ID = os.getenv("GOOGLE_SPREADSHEET_ID")
 def _authenticate_with_google():
     token_path = get_google_filepath(GoogleAuthType.TOKEN)
     credentials_path = get_google_filepath(GoogleAuthType.CREDENTIALS)
+    old_tokens_path = get_google_filepath(GoogleAuthType.TOKEN_OLD)
 
     creds = None
     # The file token.json stores the user's access and refresh tokens, and is
@@ -54,8 +57,13 @@ def _authenticate_with_google():
     # If there are no (valid) credentials available, let the user log in.
     if not creds or not creds.valid:
         if creds and creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        else:
+            try:
+                creds.refresh(Request())
+            except exceptions.RefreshError:
+                os.makedirs(os.path.dirname(old_tokens_path), exist_ok=True)
+                shutil.move(token_path, old_tokens_path)
+                creds = None
+        if not creds:
             flow = InstalledAppFlow.from_client_secrets_file(
                 credentials_path, GOOGLE_SCOPES
             )

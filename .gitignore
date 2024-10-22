@@ -1,7 +1,7 @@
 .env
 /google_credentials/credentials.json
 /google_credentials/token.json
-/google_credentials/_token.json
+/google_credentials/old_tokens
 venv
 ffmpeg
 !ffmpeg/.gitkeep
