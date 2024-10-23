@@ -8,6 +8,13 @@ from vosk import Model, KaldiRecognizer
 from lib.utilities.os_utilities import get_vosk_model_path
 
 
+# LOGGING
+
+
+from lib.utilities.log_utilities import get_logger
+LOGGER = get_logger(__name__)
+
+
 def audio2text(wav_audio_file: str, frames: int = 4000) -> str:
     model = Model(get_vosk_model_path())
     wf = wave.open(wav_audio_file, "rb")
@@ -28,6 +35,6 @@ def audio2text(wav_audio_file: str, frames: int = 4000) -> str:
 
     final_result += json.loads(rec.FinalResult())["text"]
 
-    logging.info(final_result)
+    LOGGER.info(final_result)
 
     return final_result

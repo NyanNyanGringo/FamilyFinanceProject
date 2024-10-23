@@ -1,23 +1,48 @@
-
-
-import os
-import pprint
+# TODO: меньше запросов в Google Tables
+# TODO: log присылать в виде файла
+import logging
 
 from dotenv import load_dotenv
 
 from src import server
-# from dotenv import load_dotenv
-# load_dotenv()
-# import os
-# os.getenv("TELEGRAM_TOKEN")
+
+
+# LOGGING
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(name)s %(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    # filename="mylog.log",  # TODO: save to file,
+)
+
+# set higher logging level for httpx to avoid all GET and POST requests being logged
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+# START
+
 
 if __name__ == "__main__":
-
-
-
     load_dotenv()  # load env from .env
-
     server.run()
+
+
+
+
+
+
+
+
+
+
+
+
+    # from dotenv import load_dotenv
+    # load_dotenv()
+    # import os
+    # os.getenv("TELEGRAM_TOKEN")
 
     # tests 1
     # from lib.utilities.google_utilities import RequestData, ListName

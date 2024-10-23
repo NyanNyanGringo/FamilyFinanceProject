@@ -1,17 +1,14 @@
 import logging
 
 import os
-import time
-
 from functools import partial
 
-import telegram._message
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 
 from lib.utilities.google_utilities import OperationTypes
-from lib.utilities.openai_utilities import request_data, RequestBuilder, ResponseFormat, \
-    MessageRequest, audio2text_for_finance
+from lib.utilities.openai_utilities import request_data, RequestBuilder, ResponseFormat, MessageRequest, \
+    audio2text_for_finance
 from lib.utilities.telegram_utilities import download_voice_message
 from lib.utilities.ffmpeg_utilities import convert_oga_to_wav
 from lib.utilities.vosk_utilities import audio2text
@@ -20,21 +17,19 @@ from lib.utilities.vosk_utilities import audio2text
 # LOGGING
 
 
-logging.basicConfig(
-    level=logging.DEBUG if os.getenv("DEV") else logging.INFO,
-    format="%(name)s %(asctime)s %(levelname)s %(message)s",
-    datefmt="%Y-%m-%d %H:%M:%S",
-    # filename="mylog.log",  # TODO: save to file
-)
-LOGGER = logging.getLogger(__name__)
+from lib.utilities.log_utilities import get_logger
+LOGGER = get_logger()
 
 
-# FUNCTIONS AND CLASSES
+# CLASSES
 
 
 class Audio2TextModels:
     whisper = "whisper"
     vosk = "vosk"
+
+
+# FUNCTIONS
 
 
 def replace_last_string(original_text: str, text_to_add: str):
@@ -62,17 +57,60 @@ async def get_text_from_audio(update, context, audio2text_model: Audio2TextModel
 def format_json_to_telegram_text(json: dict) -> str:
     text = ""
     for key, value in json.items():
-        if value:
+        if value and key not in ["final_answer"]:
             text += f"<i>{key}</i>: <b>{value}</b>\n"
     return text.strip()
 
 
-async def edit_message(message: telegram.Message, text: str, user_message: str = None):
+def is_text_has_status(text: str) -> bool:
+    """
+    Проверяет, есть ли в тексте строка, начинающаяся с "Статус: ".
+    """
+    text_parts = text.split("\n")
+    return any(part.startswith("Статус: ") for part in text_parts)
+
+
+def remove_status_in_text(text: str) -> str:
+    """
+    Удаляет строку со статусом из текста, если она существует и находится в последней строке.
+    """
+    text_parts = text.split("\n")
+
+    # Проверяем, есть ли статус в последней строке
+    if text_parts and text_parts[-1].startswith("Статус: "):
+        return "\n".join(text_parts[:-1]).strip()
+
+    return text.strip()
+
+
+def set_status_to_text(text: str, status: str) -> str:
+    """
+    Устанавливает новый статус в текст. Если статус уже есть, заменяет его.
+    """
+    if is_text_has_status(text):
+        # Удаляем старый статус, если он есть
+        text = remove_status_in_text(text)
+
+    # Добавляем новый статус к тексту
+    text += f"\n\nСтатус: {status}"
+    return text.strip()
+
+
+async def edit_message(message: Message, text: str, user_message: str = None, status: str = None,
+                       reply_markup: InlineKeyboardMarkup = None):
     new_text = ""
     if user_message:
         new_text += f"<code>{user_message}</code>\n\n"
     new_text += text
-    await message.edit_text(new_text, parse_mode="HTML")
+
+    LOGGER.info(f"Text before status: {new_text}")
+
+    if status:
+        new_text = set_status_to_text(new_text, status)
+
+    LOGGER.info(f"Text after status: {new_text}")
+
+    await message.edit_text(new_text, parse_mode="HTML", reply_markup=reply_markup)
 
 
 async def clarify_operation_type(operation_type, processing_message, operation_text):
@@ -109,6 +147,18 @@ def get_response_format_according_to_operation_type(operation_type: str) -> dict
 
     raise ValueError(f"Operation type {operation_type} not supported.")
 
+
+def clarify_request_message(request_message: dict) -> dict:
+    result = {}
+
+    # STOPPED THERE
+
+    for key, value in request_message.items():
+        pass
+
+    return result
+
+
 # HANDLES
 
 
@@ -126,21 +176,32 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
 
 
 async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    LOGGER.info(f"{update=}")
+    LOGGER.info(f"{context=}")
+
     query = update.callback_query
     await query.answer()  # confirm button click
+    await query.edit_message_reply_markup(reply_markup=None)  # remove buttons
 
+    message: Message = update.callback_query.message
+
+    user_answer = update.callback_query.data
     operation_type = context.user_data["operation_type"]
     request_message = context.user_data["request_message"]
-    # context.user_data["confirm"]  # STOPPED THERE :)
-    # context.user_data["reject"]
+    operation_text = context.user_data["operation_text"]
+    message_text = context.user_data["body_text"]
 
-    LOGGER.info(f"{operation_type=}")
-    LOGGER.info(f"{request_message=}")
-    LOGGER.info(f"{context.user_data['confirm']=}")
-    LOGGER.info(f"{context.user_data['reject']=}")
+    if user_answer == "reject":
+        await edit_message(message=message,
+                           text=message_text,
+                           user_message=operation_text,
+                           status="операция отменена 👀")
+        return
 
-    # remove buttons
-    await query.edit_message_reply_markup(reply_markup=None)
+    await edit_message(message=message,
+                       text=message_text,
+                       user_message=operation_text,
+                       status="подтверждено 👍")
 
 
 async def voice_message_handler(
@@ -164,10 +225,13 @@ async def voice_message_handler(
             response_format=ResponseFormat().finance_operation_response
         )
     )
+    LOGGER.info(f"{finance_operation_request_message=}")
 
     # Step III. Second requests to ChatGPT: get json data that will be added to Google Tables.
     for _, finance_operations in finance_operation_request_message.items():
         for finance_operation in finance_operations:
+
+            LOGGER.info(f"{finance_operation=}")
 
             operation_type: str = finance_operation.get("operation_type")
             operation_text: str = finance_operation.get("operation_text")
@@ -195,14 +259,26 @@ async def voice_message_handler(
                     response_format=get_response_format_according_to_operation_type(operation_type))
             )
 
+            LOGGER.info(f"(RAW) {request_message=}")
+
+            request_message = clarify_request_message(request_message)
+
+            LOGGER.info(f"{request_message=}")
+
             # save operation_type and request_message to use in button_click_handler()
+            body_text = format_json_to_telegram_text(request_message)
+
             context.user_data["operation_type"] = operation_type
             context.user_data["request_message"] = request_message
+            context.user_data["body_text"] = body_text
+            context.user_data["operation_text"] = operation_text
 
             # send message with buttons
-            await processing_message.edit_text(format_json_to_telegram_text(request_message),
-                                               reply_markup=get_reply_keyboard_markup(),
-                                               parse_mode="HTML")
+            await edit_message(message=processing_message,
+                               text=body_text,
+                               user_message=operation_text,
+                               status="ожидание ответа пользователя.",
+                               reply_markup=get_reply_keyboard_markup())
 
 
 def run() -> None:

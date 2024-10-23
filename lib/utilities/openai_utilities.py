@@ -1,6 +1,4 @@
 import logging
-import pprint
-from typing import Union
 
 from openai import OpenAI
 import json
@@ -8,7 +6,14 @@ import json
 from pydantic import BaseModel
 
 from lib.utilities import google_utilities
-from lib.utilities.google_utilities import ListName, TransferType, Status, ConfigRange, OperationTypes
+from lib.utilities.google_utilities import Status, ConfigRange, OperationTypes
+
+
+# LOGGING
+
+
+from lib.utilities.log_utilities import get_logger
+LOGGER = get_logger(__name__)
 
 
 # public
@@ -25,7 +30,7 @@ def text2text(prompt: str, model: str = "gpt-4o-mini") -> str:
         ],
     )
 
-    logging.info(f"{response=}")
+    LOGGER.info(f"{response=}")
 
     message = response.choices[0].message.content
     return message
@@ -41,7 +46,7 @@ def audio2text(audio_path: str, prompt: str = "") -> str:
         prompt=prompt
     )
 
-    logging.info(transcription)
+    LOGGER.info(transcription)
 
     return transcription.text
 
@@ -541,7 +546,7 @@ def request_data(request_builder: RequestBuilder) -> dict:
         # presence_penalty=0,
     )
 
-    logging.info(response)
+    LOGGER.info(response)
 
     message = response.choices[0].message.content
 

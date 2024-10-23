@@ -14,9 +14,10 @@
     # Дата A3 | Категория C3 | Счет D3 | Сумма E3 | Статус G3 | Комментарий J3
 """
 import logging
+
 import os
 import shutil
-import time
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import Union, Optional
 
@@ -33,14 +34,15 @@ from lib.utilities.os_utilities import get_google_filepath, GoogleAuthType
 from config import GOOGLE_SCOPES
 
 
-# public
+# LOGGING
+
+
+from lib.utilities.log_utilities import get_logger
+LOGGER = get_logger(__name__)
 
 
 load_dotenv()
 SPREADSHEET_ID = os.getenv("GOOGLE_SPREADSHEET_ID")
-
-
-# private
 
 
 def _authenticate_with_google():
@@ -86,7 +88,7 @@ def _get_sheet_ids() -> dict:
 
         sheet_ids[title] = sheet_id
 
-    logging.info(sheet_ids)
+    LOGGER.info(sheet_ids)
 
     return sheet_ids
 
@@ -112,7 +114,45 @@ class _GoogleBaseEnumClass(Enum):
         raise ValueError(f"{value} is not a valid value for {cls.__name__}")
 
 
-# public
+class Category:
+    _expenses = []  # категории расходов
+    _incomes = []  # категории доходов
+    _accounts = []  # счета
+    _last_update_time = None  # последнее обновление
+
+    def __init__(self):
+        raise RuntimeError("Создание экземпляров класса Category не допускается. "
+                           "Используйте методы и атрибуты напрямую.")
+
+    @classmethod
+    def _update(cls):
+        LOGGER.info("Update started.")
+        if cls._last_update_time is None or datetime.now() - cls._last_update_time >= timedelta(minutes=5):
+            LOGGER.info("Updating categories...")  # Для демонстрации, что метод вызывается
+            cls._expenses = get_values(cell_range=ConfigRange.expenses, transform_to_single_list=True)
+            cls._incomes = get_values(cell_range=ConfigRange.incomes, transform_to_single_list=True)
+            cls._accounts = get_values(cell_range=ConfigRange.accounts, transform_to_single_list=True)
+            cls._last_update_time = datetime.now()
+        else:
+            LOGGER.info("Update not required: Less than 5 minutes since the last update.")
+
+    @classmethod
+    @property
+    def expenses(cls):
+        cls._update()
+        return cls._expenses
+
+    @classmethod
+    @property
+    def incomes(cls):
+        cls._update()
+        return cls._incomes
+
+    @classmethod
+    @property
+    def accounts(cls):
+        cls._update()
+        return cls._accounts
 
 
 class Formulas(str, _GoogleBaseEnumClass):
@@ -302,6 +342,13 @@ def insert_and_update_row_batch_update(request_data: RequestData):
     request = _SERVICE.spreadsheets().batchUpdate(spreadsheetId=SPREADSHEET_ID, body=body)
     response = request.execute()
 
-    logging.info(response)
+    LOGGER.info(response)
 
     return response
+
+
+print(Category.expenses)  # Вызовет _update и вернет обновленный список расходов
+print(Category.incomes)   # Вызовет _update и вернет обновленный список доходов
+print(Category.accounts)  # Вызовет _update и вернет обновленный список счетов
+LOGGER.info("TEST1")
+LOGGER.warning("TEST2")
