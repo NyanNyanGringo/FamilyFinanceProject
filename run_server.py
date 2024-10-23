@@ -1,4 +1,4 @@
-import logging
+
 
 import os
 import pprint
@@ -13,12 +13,7 @@ from src import server
 
 if __name__ == "__main__":
 
-    logging.basicConfig(
-        level=logging.DEBUG if os.getenv("DEV") else logging.INFO,
-        # filename="mylog.log",
-        format="%(name)s %(asctime)s %(levelname)s %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
+
 
     load_dotenv()  # load env from .env
 
