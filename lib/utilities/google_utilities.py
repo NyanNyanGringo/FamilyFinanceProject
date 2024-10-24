@@ -125,6 +125,21 @@ class Category:
                            "Используйте методы и атрибуты напрямую.")
 
     @classmethod
+    def get_expenses(cls):
+        cls._update()
+        return cls._expenses
+
+    @classmethod
+    def get_incomes(cls):
+        cls._update()
+        return cls._incomes
+
+    @classmethod
+    def get_accounts(cls) -> list:
+        cls._update()
+        return cls._accounts
+
+    @classmethod
     def _update(cls):
         LOGGER.info("Update started.")
         if cls._last_update_time is None or datetime.now() - cls._last_update_time >= timedelta(minutes=5):
@@ -135,24 +150,6 @@ class Category:
             cls._last_update_time = datetime.now()
         else:
             LOGGER.info("Update not required: Less than 5 minutes since the last update.")
-
-    @classmethod
-    @property
-    def expenses(cls):
-        cls._update()
-        return cls._expenses
-
-    @classmethod
-    @property
-    def incomes(cls):
-        cls._update()
-        return cls._incomes
-
-    @classmethod
-    @property
-    def accounts(cls):
-        cls._update()
-        return cls._accounts
 
 
 class Formulas(str, _GoogleBaseEnumClass):
@@ -216,13 +213,13 @@ class ConfigRange(str, _GoogleBaseEnumClass):
 class RequestData(BaseModel):
     list_name: ListName
     date: int = Field(default_factory=get_google_sheets_current_date)
-    incomes_category: str
-    expenses_category: str
+    incomes_category: Optional[str] = None
+    expenses_category: Optional[str] = None
     transfer_type: Optional[TransferType] = None
-    account: str
+    account: str  # also known as write_off_account
     replenishment_account: Optional[str] = None
-    amount: Union[int, float]
-    write_off_amount: Optional[Union[int, float]] = None
+    amount: Union[int, float]  # also known as write_off_amount
+    replenishment_amount: Optional[Union[int, float]] = None
     status: Status = Status.committed
     comment: str = ""
 
@@ -233,12 +230,20 @@ class RequestData(BaseModel):
             message = f"Please specify replenishment_account. It can't be {self.replenishment_account}"
             return False, message
 
-        if self.list_name == ListName.transfers and self.write_off_amount is None:
+        if self.list_name == ListName.transfers and self.amount is None:
             message = f"Please specify write_off_amount. It can't be {self.write_off_amount}"
             return False, message
 
         if self.transfer_type == "Adjustment" and self.account != self.replenishment_account:
-            f"Using Adjustment transfer_type, account and replenishment_account must be equal."
+            message = f"Using Adjustment transfer_type, account and replenishment_account must be equal."
+            return False, message
+
+        if self.list_name == ListName.expenses and not self.expenses_category:
+            message = f"Please specify expenses_category category."
+            return False, message
+
+        if self.list_name == ListName.incomes and not self.incomes_category:
+            message = f"Please specify incomes_category category."
             return False, message
 
         return True, message
@@ -292,10 +297,14 @@ def get_update_cells_request(list_name: ListName, values_to_update: list, row_in
 def get_values_to_update_for_request(request_data: RequestData) -> list:
 
     if request_data.list_name in (ListName.expenses, ListName.incomes):
+        if request_data.list_name == ListName.expenses:
+            categoty = request_data.expenses_category
+        else:
+            categoty = request_data.incomes_category
         values_to_update = [
             {"userEnteredValue": {"numberValue": request_data.date}},  # A3
             {"userEnteredValue": {"formulaValue": Formulas.month}},  # B3
-            {"userEnteredValue": {"stringValue": request_data.category}},  # C3
+            {"userEnteredValue": {"stringValue": categoty}},  # C3
             {"userEnteredValue": {"stringValue": request_data.account}},  # D3
             {"userEnteredValue": {"numberValue": request_data.amount}},  # E3
             {"userEnteredValue": {"formulaValue": Formulas.sum_currency}},  # F3
@@ -316,12 +325,13 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
             {"userEnteredValue": {"numberValue": request_data.amount}},  # F3
             {"userEnteredValue": {"formulaValue": Formulas.sum_currency}},  # G3
             {"userEnteredValue": {"formulaValue": Formulas.write_off_main_sum}},  # H3
-            {"userEnteredValue": {"stringValue": request_data.write_off_amount}},  # I3
+            {"userEnteredValue": {"numberValue": request_data.replenishment_amount}},  # I3
             {"userEnteredValue": {"formulaValue": Formulas.replenishment_currency_sum}},  # J3
             {"userEnteredValue": {"formulaValue": Formulas.replenishment_main_sum}},  # K3
             {"userEnteredValue": {"stringValue": request_data.status}},  # L3
             {"userEnteredValue": {"stringValue": request_data.comment}},  # M3
         ]
+
         return values_to_update
 
 
@@ -342,13 +352,6 @@ def insert_and_update_row_batch_update(request_data: RequestData):
     request = _SERVICE.spreadsheets().batchUpdate(spreadsheetId=SPREADSHEET_ID, body=body)
     response = request.execute()
 
-    LOGGER.info(response)
+    LOGGER.info(f"{response=}")
 
     return response
-
-
-print(Category.expenses)  # Вызовет _update и вернет обновленный список расходов
-print(Category.incomes)   # Вызовет _update и вернет обновленный список доходов
-print(Category.accounts)  # Вызовет _update и вернет обновленный список счетов
-LOGGER.info("TEST1")
-LOGGER.warning("TEST2")

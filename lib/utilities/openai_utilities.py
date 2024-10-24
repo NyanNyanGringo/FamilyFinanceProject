@@ -6,7 +6,7 @@ import json
 from pydantic import BaseModel
 
 from lib.utilities import google_utilities
-from lib.utilities.google_utilities import Status, ConfigRange, OperationTypes
+from lib.utilities.google_utilities import Status, ConfigRange, OperationTypes, Category
 
 
 # LOGGING
@@ -78,8 +78,7 @@ def _get_adjustment_response_format() -> dict:
                             "description": "Счет корректировки баланса. Если пользователь не назвал, то 'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + google_utilities.get_values(cell_range=ConfigRange.accounts,
-                                                                               transform_to_single_list=True)
+                                "enum": ["None"] + Category.get_accounts()
                             }
                         },
                     "adjustment_amount":
@@ -142,8 +141,7 @@ def _get_transfer_response_format() -> dict:
                             "description": "Счет списания. Если пользователь не назвал, то None.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + google_utilities.get_values(cell_range=ConfigRange.accounts,
-                                                                               transform_to_single_list=True)
+                                "enum": ["None"] + Category.get_accounts()
                             }
                         },
                     "replenishment_account":
@@ -152,8 +150,7 @@ def _get_transfer_response_format() -> dict:
                             "description": "Счет пополнения. Если пользователь не назвал, то 'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + google_utilities.get_values(cell_range=ConfigRange.accounts,
-                                                                               transform_to_single_list=True)
+                                "enum": ["None"] + Category.get_accounts()
                             }
                         },
                     "write_off_amount":
@@ -219,7 +216,7 @@ def _get_expenses_response_format() -> dict:
                 "type": "object",
                 "strict": True,
                 "properties": {
-                    "category":
+                    "expenses_category":
                         {
                             "type": "string",
                             "strict": True,
@@ -227,8 +224,7 @@ def _get_expenses_response_format() -> dict:
                                            "'Другое'.",
                             "items": {
                                 "type": "string",
-                                "enum": google_utilities.get_values(cell_range=ConfigRange.expenses,
-                                                                    transform_to_single_list=True)
+                                "enum": Category.get_expenses()
                             }
                         },
                     "account":
@@ -239,8 +235,7 @@ def _get_expenses_response_format() -> dict:
                                            "то счет будет 'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + google_utilities.get_values(cell_range=ConfigRange.accounts,
-                                                                               transform_to_single_list=True)
+                                "enum": ["None"] + Category.get_accounts()
                             }
                         },
                     "amount":
@@ -277,7 +272,7 @@ def _get_expenses_response_format() -> dict:
                         }
                 },
                 "required": [
-                    "category",
+                    "expenses_category",
                     "account",
                     "amount",
                     "status",
@@ -302,7 +297,7 @@ def _get_incomes_response_format() -> dict:
                 "type": "object",
                 "strict": True,
                 "properties": {
-                    "category":
+                    "incomes_category":
                         {
                             "type": "string",
                             "strict": True,
@@ -310,8 +305,7 @@ def _get_incomes_response_format() -> dict:
                                            "'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + google_utilities.get_values(cell_range=ConfigRange.incomes,
-                                                                               transform_to_single_list=True)
+                                "enum": ["None"] + Category.get_incomes()
                             }
                         },
                     "account":
@@ -322,8 +316,7 @@ def _get_incomes_response_format() -> dict:
                                            "тогда 'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + google_utilities.get_values(cell_range=ConfigRange.accounts,
-                                                                               transform_to_single_list=True)
+                                "enum": ["None"] + Category.get_accounts()
                             }
                         },
                     "amount":
@@ -360,7 +353,7 @@ def _get_incomes_response_format() -> dict:
                         }
                 },
                 "required": [
-                    "category",
+                    "incomes_category",
                     "account",
                     "amount",
                     "status",
@@ -401,9 +394,9 @@ def _get_finance_operation_response_format() -> dict:
                                                 "type": "string",
                                                 "description": f"Тип денежной операции. Иначе, None.\n"
                                                                f"Дополнительная информация:\n"
-                                                               f"Категории расходов: {google_utilities.get_values(cell_range=ConfigRange.expenses, transform_to_single_list=True)}\n"
-                                                               f"Категории доходов: {google_utilities.get_values(cell_range=ConfigRange.incomes, transform_to_single_list=True)}\n"
-                                                               f"Счета: {google_utilities.get_values(cell_range=ConfigRange.accounts, transform_to_single_list=True)}\n"
+                                                               f"Категории расходов: {Category.get_expenses()}\n"
+                                                               f"Категории доходов: {Category.get_incomes()}\n"
+                                                               f"Счета: {Category.get_accounts()}\n"
                                                                f"Если сомневаешься между Расходы и Доходы - выбирай "
                                                                f"Расходы.",
                                                 "items": {

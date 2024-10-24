@@ -6,19 +6,25 @@ from functools import partial
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 
-from lib.utilities.google_utilities import OperationTypes
+from lib.utilities import google_utilities
+from lib.utilities.google_utilities import OperationTypes, Category, Status, RequestData, ListName, TransferType
 from lib.utilities.openai_utilities import request_data, RequestBuilder, ResponseFormat, MessageRequest, \
     audio2text_for_finance
 from lib.utilities.telegram_utilities import download_voice_message
 from lib.utilities.ffmpeg_utilities import convert_oga_to_wav
 from lib.utilities.vosk_utilities import audio2text
 
-
 # LOGGING
 
 
 from lib.utilities.log_utilities import get_logger
+
 LOGGER = get_logger()
+
+# CONFIG
+
+
+VALIDATION_TEXT = "(невалидное значение)"
 
 
 # CLASSES
@@ -124,13 +130,32 @@ async def clarify_operation_type(operation_type, processing_message, operation_t
                            user_message=operation_text)
 
 
-def get_reply_keyboard_markup() -> InlineKeyboardMarkup:
-    keyboard = [
-        [
+def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button: bool = True) -> InlineKeyboardMarkup:
+    """
+    Создаёт клавиатуру для Telegram с двумя кнопками: "Подтвердить" и "Отменить".
+
+    Args:
+        use_confirm_button (bool): Включить кнопку "Подтвердить" (по умолчанию True).
+        use_reject_button (bool): Включить кнопку "Отменить" (по умолчанию True).
+
+    Returns:
+        InlineKeyboardMarkup: Объект клавиатуры для Telegram.
+    """
+    keyboard = []
+
+    # Добавляем кнопки в зависимости от параметров
+    if use_confirm_button and use_reject_button:
+        # Если обе кнопки включены, размещаем их в одном ряду
+        keyboard.append([
             InlineKeyboardButton("Подтвердить", callback_data="confirm"),
             InlineKeyboardButton("Отменить", callback_data="reject")
-        ]
-    ]
+        ])
+    elif use_confirm_button:
+        # Если только кнопка "Подтвердить" включена
+        keyboard.append([InlineKeyboardButton("Подтвердить", callback_data="confirm")])
+    elif use_reject_button:
+        # Если только кнопка "Отменить" включена
+        keyboard.append([InlineKeyboardButton("Отменить", callback_data="reject")])
 
     return InlineKeyboardMarkup(keyboard)
 
@@ -149,12 +174,43 @@ def get_response_format_according_to_operation_type(operation_type: str) -> dict
 
 
 def clarify_request_message(request_message: dict) -> dict:
+    # Pairs of keys from request_message and values that request_message key should contain.
+    validation_dict = {
+        "expenses_category": Category.get_expenses(),
+        "account": Category.get_accounts(),
+        # "amount": int,  # Эти значения требуют специальной обработки
+        "status": Status.values(),
+        # "comment": str,  # Эти значения могут быть любыми строками
+        # "final_answer": str,
+        "incomes_category": Category.get_incomes(),
+        "write_off_account": Category.get_accounts(),
+        "replenishment_account": Category.get_accounts(),
+        # "write_off_amount": int,
+        # "replenishment_amount": int,
+    }
+
     result = {}
-
-    # STOPPED THERE
-
     for key, value in request_message.items():
-        pass
+
+        # get list of valid values that request_message.key should contain
+        if key in validation_dict:  # check if key needs validation
+
+            if isinstance(value, str):  # check if value is string
+                valid_values = validation_dict.get(key)
+                # iterate through list of valid values
+                for supported_value in valid_values:
+                    if isinstance(supported_value, str) and value.lower() == supported_value.lower():
+                        result[key] = supported_value
+                        break
+            else:
+                raise ValueError(f"Expected type of {key} is string, but got: {type(value)} {value}")
+
+        else:  # key doesn't need validation
+            result[key] = value
+
+        # Если валидация не прошла и значение не найдено в result, добавляем информацию о невалидности
+        if key in validation_dict and key not in result:
+            result[key] = f"{value} {VALIDATION_TEXT}"
 
     return result
 
@@ -166,16 +222,18 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
     LOGGER.error("Exception while handling an update:", exc_info=context.error)
 
     # send message to user about error
-    if isinstance(update, Update) and update.message:
-        try:
+    try:
+        if isinstance(update, Update):
             # Пытаемся отправить пользователю сообщение об ошибке
-            await update.message.reply_text("Произошла ошибка при обработке вашего запроса. "
-                                            "Пожалуйста, попробуйте позже.")
-        except Exception as e:
-            LOGGER.error(f"Ошибка при отправке сообщения пользователю: {e}")
+            message = update.callback_query.message or update.message
+            await message.reply_text("Произошла ошибка при обработке вашего запроса. "
+                                     "Пожалуйста, попробуйте позже.")
+    except Exception as e:
+        LOGGER.error(f"Ошибка при отправке сообщения пользователю: {e}")
 
 
 async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    LOGGER.info(f"Button clicked.")
     LOGGER.info(f"{update=}")
     LOGGER.info(f"{context=}")
 
@@ -183,8 +241,9 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()  # confirm button click
     await query.edit_message_reply_markup(reply_markup=None)  # remove buttons
 
-    message: Message = update.callback_query.message
+    raise Exception
 
+    reply_message: Message = update.callback_query.message
     user_answer = update.callback_query.data
     operation_type = context.user_data["operation_type"]
     request_message = context.user_data["request_message"]
@@ -192,13 +251,52 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     message_text = context.user_data["body_text"]
 
     if user_answer == "reject":
-        await edit_message(message=message,
+        await edit_message(message=reply_message,
                            text=message_text,
                            user_message=operation_text,
                            status="операция отменена 👀")
         return
 
-    await edit_message(message=message,
+    if operation_type in OperationTypes.expenses:
+        google_request_data = RequestData(list_name=ListName.expenses,
+                                          expenses_category=request_message.get("expenses_category"),
+                                          account=request_message.get("account"),
+                                          amount=request_message.get("amount"),
+                                          status=request_message.get("status"),
+                                          comment=request_message.get("comment"))
+    elif operation_type == OperationTypes.incomes:
+        google_request_data = RequestData(list_name=ListName.incomes,
+                                          incomes_category=request_message.get("incomes_category"),
+                                          account=request_message.get("account"),
+                                          amount=request_message.get("amount"),
+                                          status=request_message.get("status"),
+                                          comment=request_message.get("comment"))
+    elif operation_type == OperationTypes.transfers:
+        google_request_data = RequestData(list_name=ListName.transfers,
+                                          transfer_type=TransferType.transfer,
+                                          account=request_message.get("write_off_account"),
+                                          replenishment_account=request_message.get("replenishment_account"),
+                                          amount=request_message.get("write_off_amount"),
+                                          replenishment_amount=request_message.get("replenishment_amount"),
+                                          status=request_message.get("status"),
+                                          comment=request_message.get("comment"))
+    elif operation_type == OperationTypes.adjustment:
+        google_request_data = RequestData(list_name=ListName.transfers,
+                                          transfer_type=TransferType.adjustment,
+                                          account=request_message.get("adjustment_account"),
+                                          replenishment_account=request_message.get("adjustment_account"),
+                                          amount=0,
+                                          replenishment_amount=request_message.get("adjustment_amount"),
+                                          status=request_message.get("status"),
+                                          comment=request_message.get("comment"))
+    else:
+        raise ValueError(f"Unsupported operation type: {operation_type}")
+
+    LOGGER.info(f"{google_request_data=}")
+
+    google_utilities.insert_and_update_row_batch_update(google_request_data)
+
+    await edit_message(message=reply_message,
                        text=message_text,
                        user_message=operation_text,
                        status="подтверждено 👍")
@@ -209,9 +307,9 @@ async def voice_message_handler(
         context: ContextTypes.DEFAULT_TYPE,
         audio2text_model: Audio2TextModels = Audio2TextModels.whisper,
         custom_text: str = None) -> None:
-
     # Step I. Convert voice message to text.
     processing_message = await update.message.reply_text("1/3 Конвертирую аудио в текст. Ожидайте...")
+    context.user_data["reply_message"] = processing_message  # save message for next usage
     text_from_audio = await get_text_from_audio(update, context, audio2text_model, custom_text)
 
     # Step II. First request to ChatGPT: get json data with operation type and text validity.
@@ -273,12 +371,17 @@ async def voice_message_handler(
             context.user_data["body_text"] = body_text
             context.user_data["operation_text"] = operation_text
 
+            if VALIDATION_TEXT in str(request_message):
+                keyboard = get_reply_keyboard_markup(False, True)
+            else:
+                keyboard = get_reply_keyboard_markup(True, True)
+
             # send message with buttons
             await edit_message(message=processing_message,
                                text=body_text,
                                user_message=operation_text,
                                status="ожидание ответа пользователя.",
-                               reply_markup=get_reply_keyboard_markup())
+                               reply_markup=keyboard)
 
 
 def run() -> None:
@@ -291,7 +394,8 @@ def run() -> None:
     handler_with_args = partial(
         voice_message_handler,
         audio2text_model=Audio2TextModels.whisper,
-        custom_text="2238 динары продукты"
+        # custom_text="Пользователь потратил 2238 динар на категорию продукты"
+        # custom_text="Пользователь потратил 2238 динар на категорию продукты"
     )
 
     # Привязываем обработчики для разных моделей
