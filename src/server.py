@@ -241,8 +241,6 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.answer()  # confirm button click
     await query.edit_message_reply_markup(reply_markup=None)  # remove buttons
 
-    raise Exception
-
     reply_message: Message = update.callback_query.message
     user_answer = update.callback_query.data
     operation_type = context.user_data["operation_type"]
@@ -394,7 +392,7 @@ def run() -> None:
     handler_with_args = partial(
         voice_message_handler,
         audio2text_model=Audio2TextModels.whisper,
-        # custom_text="Пользователь потратил 2238 динар на категорию продукты"
+        custom_text="Пользователь потратил 2238 динар на категорию продукты"
         # custom_text="Пользователь потратил 2238 динар на категорию продукты"
     )
 

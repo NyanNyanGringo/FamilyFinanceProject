@@ -517,8 +517,10 @@ class ResponseFormat:
 
 
 class Model:
-    gpt_4o_mini: str = "gpt-4o-mini"
-    gpt_4o: str = "gpt-4o"
+    gpt_4o_mini: str = "gpt-4o-mini"  # 0.15$
+    gpt_4o: str = "gpt-4o"  # 2.50$
+    o3_mini: str = "o3-mini"  # 1.10$
+    o1: str = "o1"  # 15$
 
 
 class RequestBuilder(BaseModel):

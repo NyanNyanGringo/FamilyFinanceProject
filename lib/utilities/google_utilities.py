@@ -159,25 +159,25 @@ class Formulas(str, _GoogleBaseEnumClass):
     month = """=DATE(TEXT($A3, "YYYY"), TEXT($A3, "M"), 1)"""
 
     # Сумма (Валюта): 'Расходы'!F3:F | 'Переводы'!G3:G | 'Доходы'!F3:F
-    sum_currency = """=IF($D3<>"", VLOOKUP($D3, '*config'!I:J, 2, ""), "?")"""
+    sum_currency = """=IF($D3<>"", VLOOKUP($D3, '*config'!J:K, 2, ""), "?")"""
 
     # Сумма списания в основной валюте: 'Переводы'!H3:H
-    write_off_main_sum = """=IF(AND($D3<>"", $F3<>0), ROUND($F3 * VLOOKUP(VLOOKUP($D3, '*config'!I:J, 2, FALSE), 
-    '*config'!F:G, 2, FALSE), '*config'!$A$5), 0)"""
+    write_off_main_sum = """=IF(AND($D3<>"", $F3<>0), ROUND($F3 * VLOOKUP(VLOOKUP($D3, '*config'!J:K, 2, FALSE),
+    '*config'!F:H, 3, FALSE), '*config'!$A$5), 0)"""
 
     # Сумма пополнения / Корректировки (Валюта): 'Переводы'!J3:J
     replenishment_currency_sum = """=IF($E3<>"", VLOOKUP($E3, '*config'!I:J, 2, ""), "?")"""
 
     # Сумма пополнения в основной валюте: 'Переводы'!K3:K
-    replenishment_main_sum = """=IF(AND($E3<>"", $I3<>0), ROUND($I3 * VLOOKUP(VLOOKUP($E3, '*config'!I:J, 2, FALSE), 
-    '*config'!F:G, 2, FALSE), '*config'!$A$5), 0)"""
+    replenishment_main_sum = """=IF(AND($E3<>"", $I3<>0), ROUND($I3 * VLOOKUP(VLOOKUP($E3, '*config'!J:K, 2, FALSE),
+    '*config'!F:H, 3, FALSE), '*config'!$A$5), 0)"""
 
     # Сумма в основной валюте: 'Расходы'!H3:H | 'Доходы'!H3:H
-    main_sum = """=IF($D3<>"", ROUND($E3 * VLOOKUP(VLOOKUP($D3, '*config'!I:J, 2, FALSE), 
-    '*config'!F:G, 2, FALSE), '*config'!$A$5), 0)"""
+    main_sum = """=IF($D3<>"", ROUND($E3 * VLOOKUP(VLOOKUP($D3, '*config'!J:K, 2, FALSE),
+    '*config'!F:H, 3, FALSE), '*config'!$A$5), 0)"""
 
     # Сумма в основной валюте (Валюта): 'Расходы'!I3:I | 'Доходы'!I3:I
-    main_sum_currency = """=IF($D3<>"", '*config'!$H$5, "?")"""
+    main_sum_currency = """=IF($D3<>"", '*config'!$I$5, "?")"""
 
 
 class OperationTypes(str, _GoogleBaseEnumClass):
@@ -206,8 +206,8 @@ class TransferType(str, _GoogleBaseEnumClass):
 class ConfigRange(str, _GoogleBaseEnumClass):
     incomes = "*config!B5:B105"
     expenses = "*config!C5:E105"
-    currencies = "*config!F5:H105"
-    accounts = "*config!I5:K105"
+    currencies = "*config!F5:I105"
+    accounts = "*config!J5:L105"
 
 
 class RequestData(BaseModel):
