@@ -21,7 +21,9 @@ Install dependencies:
 poetry install
 ```
 
-Install ffmpeg at the root of the project:
+#### Install ffmpeg:
+
+##### For Windows:
 ```
 Download ffmpeg: https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2024-09-12-14-07
 
@@ -34,7 +36,21 @@ Example structure:
 - /bin
 - /doc
 - /LICENSE.txt
+```
 
+##### For macOS:
+```
+brew install ffmpeg
+```
+The application will automatically find the ffmpeg in your PATH.
+
+##### For Linux:
+```
+# Ubuntu/Debian
+sudo apt-get install ffmpeg
+
+# CentOS/RHEL
+sudo yum install ffmpeg
 ```
 
 Rename the `.env.example` file to `.env` and specify the required values in it.

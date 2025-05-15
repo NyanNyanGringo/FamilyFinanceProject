@@ -55,7 +55,7 @@ def run() -> None:
     # Используем functools.partial для передачи дополнительного аргумента
     handler_with_vosk = partial(
         add_row_to_google_tables_based_on_the_voice_message,
-        audio2text_model=Audio2TextModels.vosk
+        audio2text_model=Audio2TextModels.whisper
     )
 
     # Привязываем обработчики для разных моделей
