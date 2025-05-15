@@ -389,11 +389,9 @@ def run() -> None:
     application.add_error_handler(global_error_handler)
 
     # Используем functools.partial для передачи дополнительного аргумента
-    handler_with_args = partial(
-        voice_message_handler,
-        audio2text_model=Audio2TextModels.whisper,
-        custom_text="Пользователь потратил 2238 динар на категорию продукты"
-        # custom_text="Пользователь потратил 2238 динар на категорию продукты"
+    handler_with_vosk = partial(
+        add_row_to_google_tables_based_on_the_voice_message,
+        audio2text_model=Audio2TextModels.whisper
     )
 
     # Привязываем обработчики для разных моделей

@@ -1,6 +1,7 @@
 import os
 from datetime import datetime
 import enum
+import platform
 
 from config import VOSK_MODEL
 
@@ -18,7 +19,17 @@ def get_voice_messages_path(create: bool = False) -> str:
 
 
 def get_ffmpeg_executable_path() -> str:
-    return os.path.join(_get_root_path(), "ffmpeg", "bin", "ffmpeg.exe")
+    system = platform.system()
+    
+    if system == "Darwin":  # macOS
+        # On macOS, ffmpeg is likely installed via Homebrew and available in PATH
+        return "ffmpeg"
+    elif system == "Windows":
+        # On Windows, use the local ffmpeg executable
+        return os.path.join(_get_root_path(), "ffmpeg", "bin", "ffmpeg.exe")
+    else:  # Linux or other systems
+        # On Linux, assume ffmpeg is in PATH
+        return "ffmpeg"
 
 
 def get_vosk_model_path() -> str:

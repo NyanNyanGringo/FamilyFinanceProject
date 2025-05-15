@@ -8,3 +8,5 @@ ffmpeg
 models
 !models/.gitkeep
 voice_messages
+.gitpmoji.env
+.DS_Store
