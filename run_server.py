@@ -1,24 +1,38 @@
-import logging
+# TODO: При ошибке: log присылать в виде файла
+# TODO: Постоянный ключ от Google Cloud
+# TODO: Убрать несколько запросов в одном голосовом
+# TODO: На основе Apple утечки доработать промпты
+# TODO: Сделать в Google Tables "инструкции пользователя для ChatGPT". Пример:
+    # Если деньги списаны со счета Влада, то категория всегда ГОСПОДИН
+    # Если деньги списаны со счета Лизы, то категория всегда ГОСПОЖА
+    # Луна - это собакая Влада и Лизы
+# TODO: Корректировка запроса через reply
 
-import os
+
+import logging
 
 from dotenv import load_dotenv
 
 from src import server
 
 
+# LOGGING
+
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(name)s %(asctime)s %(levelname)s %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    # filename="mylog.log",  # TODO: save to file,
+)
+
+# set higher logging level for httpx to avoid all GET and POST requests being logged
+logging.getLogger("httpx").setLevel(logging.WARNING)
+
+
+# START
+
+
 if __name__ == "__main__":
-
-    logging.basicConfig(
-        level=logging.DEBUG if os.getenv("DEV") else logging.INFO,
-        # filename="mylog.log",
-        format="%(name)s %(asctime)s %(levelname)s %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S"
-    )
-
     load_dotenv()  # load env from .env
-
     server.run()
-    # from lib.utilities import google_utilities
-    #
-    # google_utilities.insert_new_row()

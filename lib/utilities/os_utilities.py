@@ -1,4 +1,5 @@
 import os
+from datetime import datetime
 import enum
 import platform
 
@@ -43,6 +44,7 @@ def get_vosk_model_path() -> str:
 class GoogleAuthType(enum.Enum):
     CREDENTIALS = "credentials.json"
     TOKEN = "token.json"
+    TOKEN_OLD = os.path.join("old_tokens", f"token_{datetime.now().strftime('%Y-%m-%d_%Hh-%Mm-%Ss')}.json")
 
 
 def get_google_filepath(auth_type: GoogleAuthType) -> str:
