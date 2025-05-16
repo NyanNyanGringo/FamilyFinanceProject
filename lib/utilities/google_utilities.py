@@ -88,7 +88,11 @@ def _get_sheet_ids() -> dict:
 
         sheet_ids[title] = sheet_id
 
-    LOGGER.info(sheet_ids)
+    LOGGER.info(f"Sheet IDs: {sheet_ids}")
+    
+    # Подробное логирование для отладки
+    for name, id in sheet_ids.items():
+        LOGGER.info(f"Sheet: '{name}', ID: {id}")
 
     return sheet_ids
 
@@ -148,6 +152,9 @@ class Category:
             cls._incomes = get_values(cell_range=ConfigRange.incomes, transform_to_single_list=True)
             cls._accounts = get_values(cell_range=ConfigRange.accounts, transform_to_single_list=True)
             cls._last_update_time = datetime.now()
+            LOGGER.info(f"{cls._expenses=}")
+            LOGGER.info(f"{cls._incomes=}")
+            LOGGER.info(f"{cls._accounts=}")
         else:
             LOGGER.info("Update not required: Less than 5 minutes since the last update.")
 
@@ -156,28 +163,64 @@ class Formulas(str, _GoogleBaseEnumClass):
     """Возвращает формулы из Google Tables, которые используются в FamilyFinanceProject"""
 
     # Месяц: 'Расходы'!B3:B | 'Переводы'!B3:B | 'Доходы'!B3:B
-    month = """=DATE(TEXT($A3, "YYYY"), TEXT($A3, "M"), 1)"""
+    month = """=LET(
+  _date,
+  INDEX($A:$A, ROW()),
+  DATE(VALUE(TEXT(_date, "YYYY")), VALUE(TEXT(_date, "M")), 1)
+  )
+"""
 
     # Сумма (Валюта): 'Расходы'!F3:F | 'Переводы'!G3:G | 'Доходы'!F3:F
-    sum_currency = """=IF($D3<>"", VLOOKUP($D3, '*config'!J:K, 2, ""), "?")"""
+    sum_currency = """=IFERROR(
+  VLOOKUP(
+    INDEX($D:$D, ROW()),
+    {_account_fullnames, _account_currency_codes},
+    2,
+    FALSE
+    ),
+  "?"
+  )"""
 
-    # Сумма списания в основной валюте: 'Переводы'!H3:H
-    write_off_main_sum = """=IF(AND($D3<>"", $F3<>0), ROUND($F3 * VLOOKUP(VLOOKUP($D3, '*config'!J:K, 2, FALSE),
-    '*config'!F:H, 3, FALSE), '*config'!$A$5), 0)"""
+    # Сумма пополнения в основной валюте: 'Переводы'!I3:
+    replenishment_main_sum = """=IFERROR(
+  VLOOKUP(
+    INDEX($E:$E, ROW()),
+    {_account_fullnames, _account_currency_codes},
+    2,
+    FALSE
+    ),
+  "?"
+  )"""
 
-    # Сумма пополнения / Корректировки (Валюта): 'Переводы'!J3:J
-    replenishment_currency_sum = """=IF($E3<>"", VLOOKUP($E3, '*config'!I:J, 2, ""), "?")"""
-
-    # Сумма пополнения в основной валюте: 'Переводы'!K3:K
-    replenishment_main_sum = """=IF(AND($E3<>"", $I3<>0), ROUND($I3 * VLOOKUP(VLOOKUP($E3, '*config'!J:K, 2, FALSE),
-    '*config'!F:H, 3, FALSE), '*config'!$A$5), 0)"""
+    # Сумма пополнения (Валюта): 'Переводы'!I3:I
+    replenishment_currency_sum = """=IFERROR(
+  VLOOKUP(
+    INDEX($E:$E, ROW()),
+    {_account_fullnames, _account_currency_codes},
+    2,
+    FALSE
+    ),
+  "?"
+  )"""
 
     # Сумма в основной валюте: 'Расходы'!H3:H | 'Доходы'!H3:H
-    main_sum = """=IF($D3<>"", ROUND($E3 * VLOOKUP(VLOOKUP($D3, '*config'!J:K, 2, FALSE),
-    '*config'!F:H, 3, FALSE), '*config'!$A$5), 0)"""
+    main_sum = """=IF(
+  INDEX($D:$D, ROW())<>"",
+  IFERROR(
+    ROUND(
+      INDEX($E:$E, ROW()) * VLOOKUP(VLOOKUP(INDEX($D:$D, ROW()), {_account_fullnames, _account_currency_codes}, 2, FALSE), _currencies, 3, FALSE), _userconfig_round_to),
+    "ERROR"
+  ),
+  ""
+)
+"""
 
     # Сумма в основной валюте (Валюта): 'Расходы'!I3:I | 'Доходы'!I3:I
-    main_sum_currency = """=IF($D3<>"", '*config'!$I$5, "?")"""
+    main_sum_currency = """=IF(
+    INDEX($D:$D, ROW())<>"",
+    main_currency,
+    "?"
+    )"""
 
 
 class OperationTypes(str, _GoogleBaseEnumClass):
@@ -188,9 +231,9 @@ class OperationTypes(str, _GoogleBaseEnumClass):
 
 
 class ListName(str, _GoogleBaseEnumClass):
-    expenses = "Расходы"
-    transfers = "Переводы"
-    incomes = "Доходы"
+    expenses = "↙️Расходы"
+    transfers = "🔄Переводы"
+    incomes = "↗️Доходы"
 
 
 class Status(str, _GoogleBaseEnumClass):
@@ -204,10 +247,10 @@ class TransferType(str, _GoogleBaseEnumClass):
 
 
 class ConfigRange(str, _GoogleBaseEnumClass):
-    incomes = "*config!B5:B105"
-    expenses = "*config!C5:E105"
-    currencies = "*config!F5:I105"
-    accounts = "*config!J5:L105"
+    incomes = "*data!AK7:AK199"
+    expenses = "*data!AJ7:AJ199"
+    accounts = "*data!M7:M199"
+    # currencies = "*data!F5:I105"
 
 
 class RequestData(BaseModel):
@@ -269,9 +312,20 @@ def get_values(cell_range: str or ConfigRange, transform_to_single_list: bool = 
 
 
 def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) -> dict:
+    sheet_id = _SHEETS_IDS.get(list_name)
+    
+    # Подробное логирование для отладки
+    LOGGER.info(f"Getting sheet_id for list_name: '{list_name}' (type: {type(list_name)})")
+    LOGGER.info(f"Available sheet keys: {list(_SHEETS_IDS.keys())}")
+    LOGGER.info(f"Sheet ID found: {sheet_id}")
+    
+    if sheet_id is None or sheet_id == 0:
+        # Если ID не найден или равен 0, выведем ошибку
+        raise ValueError(f"Invalid sheet ID {sheet_id} for list name '{list_name}'. Available sheets: {list(_SHEETS_IDS.keys())}")
+    
     insert_row_above_request = {
         "insertDimension": {
-            "range": {"sheetId": _SHEETS_IDS.get(list_name),
+            "range": {"sheetId": sheet_id,
                       "dimension": "ROWS",
                       "startIndex": insert_above_row - 1,
                       "endIndex": insert_above_row},
@@ -281,7 +335,7 @@ def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) ->
     return insert_row_above_request
 
 
-def get_update_cells_request(list_name: ListName, values_to_update: list, row_index: int = 2, column_index: int = 0):
+def get_update_cells_request(list_name: ListName, values_to_update: list, row_index: int = 6, column_index: int = 0):
     update_cells_request = {
         "updateCells": {
             "start": {"sheetId": _SHEETS_IDS.get(list_name),
@@ -312,6 +366,7 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
             {"userEnteredValue": {"formulaValue": Formulas.main_sum}},  # H3
             {"userEnteredValue": {"formulaValue": Formulas.main_sum_currency}},  # I3
             {"userEnteredValue": {"stringValue": request_data.comment}}  # J3
+            # {"userEnteredValue": {"stringValue": request_data.debtor}}  # K3
         ]
         return values_to_update
 
@@ -324,12 +379,10 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
             {"userEnteredValue": {"stringValue": request_data.replenishment_account}},  # E3
             {"userEnteredValue": {"numberValue": request_data.amount}},  # F3
             {"userEnteredValue": {"formulaValue": Formulas.sum_currency}},  # G3
-            {"userEnteredValue": {"formulaValue": Formulas.write_off_main_sum}},  # H3
-            {"userEnteredValue": {"numberValue": request_data.replenishment_amount}},  # I3
-            {"userEnteredValue": {"formulaValue": Formulas.replenishment_currency_sum}},  # J3
-            {"userEnteredValue": {"formulaValue": Formulas.replenishment_main_sum}},  # K3
-            {"userEnteredValue": {"stringValue": request_data.status}},  # L3
-            {"userEnteredValue": {"stringValue": request_data.comment}},  # M3
+            {"userEnteredValue": {"numberValue": request_data.replenishment_amount}},  # H3
+            {"userEnteredValue": {"formulaValue": Formulas.replenishment_currency_sum}},  # I3
+            {"userEnteredValue": {"stringValue": request_data.status}},  # J3
+            {"userEnteredValue": {"stringValue": request_data.comment}},  # K3
         ]
 
         return values_to_update
@@ -342,7 +395,7 @@ def insert_and_update_row_batch_update(request_data: RequestData):
         raise ValueError(message)
 
     insert_row_request = get_insert_row_above_request(list_name=request_data.list_name,
-                                                      insert_above_row=3)
+                                                      insert_above_row=7)
 
     update_cells_request = get_update_cells_request(list_name=request_data.list_name,
                                                     values_to_update=get_values_to_update_for_request(request_data))

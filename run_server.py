@@ -1,3 +1,4 @@
+# TODO: Добавить поддержку 'Должник'
 # TODO: При ошибке: log присылать в виде файла
 # TODO: Постоянный ключ от Google Cloud
 # TODO: Убрать несколько запросов в одном голосовом
@@ -27,7 +28,7 @@ logging.basicConfig(
 )
 
 # set higher logging level for httpx to avoid all GET and POST requests being logged
-logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpx").setLevel(logging.DEBUG)
 
 
 # START

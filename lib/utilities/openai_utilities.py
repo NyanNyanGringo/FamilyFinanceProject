@@ -25,7 +25,7 @@ def text2text(prompt: str, model: str = "gpt-4o-mini") -> str:
     response = CLIENT.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": "You are a helpful assistant."},
+            {"role": "system", "content": "Ты должен ответить только в формате JSON, строго по схеме. Не добавляй никакого текста вне JSON. Если не хватает данных — используй значения по умолчанию, указанные в схеме."},
             {"role": "user", "content": prompt}
         ],
     )
@@ -75,24 +75,27 @@ def _get_adjustment_response_format() -> dict:
                     "adjustment_account":
                         {
                             "type": "string",
-                            "description": "Счет корректировки баланса. Если пользователь не назвал, то 'None'.",
+                            # "description": "Счет корректировки баланса. Если пользователь не назвал, то 'None'.",
+                            "strict": True,
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + Category.get_accounts()
+                                "enum": Category.get_accounts()
                             }
                         },
                     "adjustment_amount":
                         {
                             "type": "number",
-                            "description": "Сумма корректировки счета. Если пользователь не назвал сумму, то сумма "
-                                           "равняется 0."
+                            "strict": True,
+                            # "description": "Сумма корректировки счета. Если пользователь не назвал сумму, то сумма "
+                                           # "равняется 0."
                         },
                     "status":
                         {
                             "type": "string",
-                            "description": "По-умолчанию статус всегда Committed - то есть корректировка совершена. "
-                                           "Если пользователь каким-то образом сказал, что корректировка "
-                                           "запланирована, то статус Planned.",
+                            "strict": True,
+                            # "description": "По-умолчанию статус всегда Committed - то есть корректировка совершена. "
+                                           # "Если пользователь каким-то образом сказал, что корректировка "
+                                           # "запланирована, то статус Planned.",
                             "items": {
                                 "type": "string",
                                 "enum": Status.values()
@@ -101,14 +104,15 @@ def _get_adjustment_response_format() -> dict:
                     "comment":
                         {
                             "type": "string",
-                            "description": "Какой-либо дополнительный комментарий от пользователя. Поле может "
-                                           "быть пустым."
+                            "strict": True,
+                            # "description": "Какой-либо дополнительный комментарий от пользователя. Поле может "
+                                           # "быть пустым."
                         },
                     "final_answer":
                         {
                             "type": "string",
-                            "description": "Напиши сообщение пользователю: как ты понял его запроси всей ли информации "
-                                           "было достаточно для заполнения json ответа."
+                            # "description": "Напиши сообщение пользователю: как ты понял его запроси всей ли информации "
+                                           # "было достаточно для заполнения json ответа."
                         }
                 },
                 "required": [
@@ -138,39 +142,43 @@ def _get_transfer_response_format() -> dict:
                     "write_off_account":
                         {
                             "type": "string",
-                            "description": "Счет списания. Если пользователь не назвал, то None.",
+                            "strict": True,
+                            # "description": "Счет списания. Если пользователь не назвал, то None.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + Category.get_accounts()
+                                "enum": Category.get_accounts()
                             }
                         },
                     "replenishment_account":
                         {
                             "type": "string",
-                            "description": "Счет пополнения. Если пользователь не назвал, то 'None'.",
+                            # "description": "Счет пополнения. Если пользователь не назвал, то 'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + Category.get_accounts()
+                                "enum": Category.get_accounts()
                             }
                         },
                     "write_off_amount":
                         {
                             "type": "number",
-                            "description": "Сумма списания со счета. Сумма должна быть положительная. Если "
-                                           "пользователь не назвал сумму, то сумма равняется -1."
+                            "strict": True,
+                            # "description": "Сумма списания со счета. Сумма должна быть положительная. Если "
+                                           # "пользователь не назвал сумму, то сумма равняется -1."
                         },
                     "replenishment_amount":
                         {
                             "type": "number",
-                            "description": "Сумма пополнения счета. Сумма должна быть положительная. Если "
-                                           "пользователь не назвал сумму, то сумма равняется -1."
+                            "strict": True,
+                            # "description": "Сумма пополнения счета. Сумма должна быть положительная. Если "
+                                           # "пользователь не назвал сумму, то сумма равняется -1."
                         },
                     "status":
                         {
                             "type": "string",
-                            "description": "По-умолчанию статус всегда Committed - то есть перевод совершен. "
-                                           "Если пользователь каким-то образом сказал, что перевод запланирован, "
-                                           "то статус Planned.",
+                            "strict": True,
+                            # "description": "По-умолчанию статус всегда Committed - то есть перевод совершен. "
+                                           # "Если пользователь каким-то образом сказал, что перевод запланирован, "
+                                           # "то статус Planned.",
                             "items": {
                                 "type": "string",
                                 "enum": Status.values()
@@ -179,14 +187,15 @@ def _get_transfer_response_format() -> dict:
                     "comment":
                         {
                             "type": "string",
-                            "description": "Какой-либо дополнительный комментарий от пользователя. Поле может "
-                                           "быть пустым."
+                            "strict": True,
+                            # "description": "Какой-либо дополнительный комментарий от пользователя. Поле может "
+                                           # "быть пустым."
                         },
                     "final_answer":
                         {
                             "type": "string",
-                            "description": "Напиши сообщение пользователю: как ты понял его запроси всей ли информации "
-                                           "было достаточно для заполнения json ответа."
+                            # "description": "Напиши сообщение пользователю: как ты понял его запроси всей ли информации "
+                                           # "было достаточно для заполнения json ответа."
                         }
                 },
                 "required": [
@@ -220,8 +229,8 @@ def _get_expenses_response_format() -> dict:
                         {
                             "type": "string",
                             "strict": True,
-                            "description": "Категория расходов. Если такой категории нет, то категория "
-                                           "'Другое'.",
+                            # "description": "Категория расходов. Если такой категории нет, то категория "
+                                           # "'Другое'.",
                             "items": {
                                 "type": "string",
                                 "enum": Category.get_expenses()
@@ -231,27 +240,27 @@ def _get_expenses_response_format() -> dict:
                         {
                             "type": "string",
                             "strict": True,
-                            "description": "Выбери счет расходов. Если такого счета нет в списке, "
-                                           "то счет будет 'None'.",
+                            # "description": "Выбери счет расходов. Если такого счета нет в списке, "
+                                           # "то счет будет 'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + Category.get_accounts()
+                                "enum": Category.get_accounts()
                             }
                         },
                     "amount":
                         {
                             "type": "number",
                             "strict": True,
-                            "description": "Сумма, которую потратил пользователь. Сумма должна быть положительная. "
-                                           "Если пользователь не назвал сумму, то сумма равняется -1."
+                            # "description": "Сумма, которую потратил пользователь. Сумма должна быть положительная. "
+                                           # "Если пользователь не назвал сумму, то сумма равняется -1."
                         },
                     "status":
                         {
                             "type": "string",
                             "strict": True,
-                            "description": "По-умолчанию статус всегда Committed - то есть расход совершен. "
-                                           "Если пользователь каким-то образом сказал, что расход запланирован, "
-                                           "то статус Planned.",
+                            # "description": "По-умолчанию статус всегда Committed - то есть расход совершен. "
+                                           # "Если пользователь каким-то образом сказал, что расход запланирован, "
+                                           # "то статус Planned.",
                             "items": {
                                 "type": "string",
                                 "enum": Status.values()
@@ -261,14 +270,14 @@ def _get_expenses_response_format() -> dict:
                         {
                             "type": "string",
                             "strict": True,
-                            "description": "Какой-либо дополнительный комментарий от пользователя. Поле может "
-                                           "быть пустым."
+                            # "description": "Какой-либо дополнительный комментарий от пользователя. Поле может "
+                                           # "быть пустым."
                         },
                     "final_answer":
                         {
                             "type": "string",
-                            "description": "Напиши сообщение пользователю: как ты понял его запроси всей ли информации "
-                                           "было достаточно для заполнения json ответа."
+                            # "description": "Напиши сообщение пользователю: как ты понял его запроси всей ли информации "
+                                           # "было достаточно для заполнения json ответа."
                         }
                 },
                 "required": [
@@ -301,38 +310,38 @@ def _get_incomes_response_format() -> dict:
                         {
                             "type": "string",
                             "strict": True,
-                            "description": "Категория доходов. Если пользователь не назвал категорию доходов, тогда"
-                                           "'None'.",
+                            # "description": "Категория доходов. Если пользователь не назвал категорию доходов, тогда"
+                                           # "'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + Category.get_incomes()
+                                "enum": Category.get_incomes()
                             }
                         },
                     "account":
                         {
                             "type": "string",
                             "strict": True,
-                            "description": "Имя счета на который поступили деньги. Если пользователь не назвал счет, "
-                                           "тогда 'None'.",
+                            # "description": "Имя счета на который поступили деньги. Если пользователь не назвал счет, "
+                                           # "тогда 'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": ["None"] + Category.get_accounts()
+                                "enum": Category.get_accounts()
                             }
                         },
                     "amount":
                         {
                             "type": "number",
                             "strict": True,
-                            "description": "Сумма пополнения счета. Сумма должна быть положительная. "
-                                           "Если пользователь не назвал сумму, то сумма равняется -1."
+                            # "description": "Сумма пополнения счета. Сумма должна быть положительная. "
+                                           # "Если пользователь не назвал сумму, то сумма равняется -1."
                         },
                     "status":
                         {
                             "type": "string",
                             "strict": True,
-                            "description": "По-умолчанию статус всегда Committed - то есть денежка поступила на счет. "
-                                           "Если пользователь каким-то образом сказал, что доход запланирован, "
-                                           "то статус Planned.",
+                            # "description": "По-умолчанию статус всегда Committed - то есть денежка поступила на счет. "
+                                           # "Если пользователь каким-то образом сказал, что доход запланирован, "
+                                           # "то статус Planned.",
                             "items": {
                                 "type": "string",
                                 "enum": Status.values()
@@ -342,14 +351,14 @@ def _get_incomes_response_format() -> dict:
                         {
                             "type": "string",
                             "strict": True,
-                            "description": "Какой-либо дополнительный комментарий от пользователя. Поле может "
-                                           "быть пустым."
+                            # "description": "Какой-либо дополнительный комментарий от пользователя. Поле может "
+                                           # "быть пустым."
                         },
                     "final_answer":
                         {
                             "type": "string",
-                            "description": "Напиши сообщение пользователю: как ты понял его запроси всей ли информации "
-                                           "было достаточно для заполнения json ответа."
+                            # "description": "Напиши сообщение пользователю: как ты понял его запроси всей ли информации "
+                                           # "было достаточно для заполнения json ответа."
                         }
                 },
                 "required": [
@@ -392,6 +401,7 @@ def _get_finance_operation_response_format() -> dict:
                                         "operation_type":
                                             {
                                                 "type": "string",
+                                                "strict": True,
                                                 "description": f"Тип денежной операции. Иначе, None.\n"
                                                                f"Дополнительная информация:\n"
                                                                f"Категории расходов: {Category.get_expenses()}\n"
@@ -407,14 +417,15 @@ def _get_finance_operation_response_format() -> dict:
                                         "operation_text":
                                             {
                                                 "type": "string",
-                                                "description": "Исходное сообщения от пользователя, в которой "
-                                                               "он говорит о данной денежной операции."
+                                                "strict": True,
+                                                # "description": "Исходное сообщения от пользователя, в которой "
+                                                               # "он говорит о данной денежной операции."
                                             },
                                         "message_to_user":
                                             {
                                                 "type": "string",
-                                                "description": "Напиши сообщение пользователю: всей ли информации было "
-                                                               "достаточно и является ли запрос релевантным."
+                                                # "description": "Напиши сообщение пользователю: всей ли информации было "
+                                                               # "достаточно и является ли запрос релевантным."
                                             },
                                     },
                                     "required": [
@@ -521,12 +532,15 @@ class Model:
     gpt_4o: str = "gpt-4o"  # 2.50$
     o3_mini: str = "o3-mini"  # 1.10$
     o1: str = "o1"  # 15$
+    gpt_4_1: str = "gpt-4.1"  # 2.00$
+    gpt_4_1_mini: str = "gpt-4.1-mini"  # 0.40$
+    o4_mini: str = "o4-mini"  # 1.10$
 
 
 class RequestBuilder(BaseModel):
     message_request: list  # use MessageRequest().attribute
     response_format: dict  # use ResponseFormat().attribute
-    model: str = Model().gpt_4o_mini  # use Model().attribute
+    model: str = Model().gpt_4_1  # use Model().attribute
 
 
 def request_data(request_builder: RequestBuilder) -> dict:
@@ -534,9 +548,9 @@ def request_data(request_builder: RequestBuilder) -> dict:
         model=request_builder.model,
         messages=request_builder.message_request,
         response_format=request_builder.response_format,
-        temperature=0.15,
+        temperature=0.05,
         # max_tokens=2048,
-        top_p=0.5,
+        top_p=0.25,
         # frequency_penalty=0,
         # presence_penalty=0,
     )
