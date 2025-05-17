@@ -414,7 +414,7 @@ def _get_finance_operation_response_format() -> dict:
                                                     "enum": ["None"] + OperationTypes.values()
                                                 }
                                             },
-                                        "operation_text":
+                                        "source_inputted_text":
                                             {
                                                 "type": "string",
                                                 "strict": True,
@@ -431,7 +431,7 @@ def _get_finance_operation_response_format() -> dict:
                                     "required": [
                                         "user_request_is_relevant",
                                         "operation_type",
-                                        "operation_text",
+                                        "source_inputted_text",
                                         "message_to_user",
                                     ],
                                     "additionalProperties": False

@@ -119,7 +119,7 @@ async def edit_message(message: Message, text: str, user_message: str = None, st
     await message.edit_text(new_text, parse_mode="HTML", reply_markup=reply_markup)
 
 
-async def clarify_operation_type(operation_type, processing_message, operation_text):
+async def clarify_operation_type(operation_type, processing_message, source_inputted_text):
     try:
         operation_type = OperationTypes.get_item(operation_type)
         return operation_type
@@ -127,7 +127,7 @@ async def clarify_operation_type(operation_type, processing_message, operation_t
         await edit_message(message=processing_message,
                            text=f'Тип операции "{operation_type}", который определил ChatGPT, неверный. '
                                 f'Попробуйте перезаписать голосовое сообщение.',
-                           user_message=operation_text)
+                           user_message=source_inputted_text)
 
 
 def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button: bool = True) -> InlineKeyboardMarkup:
@@ -245,13 +245,13 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     user_answer = update.callback_query.data
     operation_type = context.user_data["operation_type"]
     request_message = context.user_data["request_message"]
-    operation_text = context.user_data["operation_text"]
+    source_inputted_text = context.user_data["source_inputted_text"]
     message_text = context.user_data["body_text"]
 
     if user_answer == "reject":
         await edit_message(message=reply_message,
                            text=message_text,
-                           user_message=operation_text,
+                           user_message=source_inputted_text,
                            status="операция отменена 👀")
         return
 
@@ -296,7 +296,7 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await edit_message(message=reply_message,
                        text=message_text,
-                       user_message=operation_text,
+                       user_message=source_inputted_text,
                        status="подтверждено 👍")
 
 
@@ -330,28 +330,28 @@ async def voice_message_handler(
             LOGGER.info(f"{finance_operation=}")
 
             operation_type: str = finance_operation.get("operation_type")
-            operation_text: str = finance_operation.get("operation_text")
+            source_inputted_text: str = finance_operation.get("source_inputted_text")
             message_to_user: str = finance_operation.get("message_to_user")
             user_request_is_correct: bool = finance_operation.get("user_request_is_relevant")
 
-            operation_type = await clarify_operation_type(operation_type, processing_message, operation_text)
+            operation_type = await clarify_operation_type(operation_type, processing_message, source_inputted_text)
             if not operation_type:
                 continue
 
             if not user_request_is_correct:
                 await edit_message(message=processing_message,
                                    text=f'Запрос некорректен. Ответ ChatGPT: "{message_to_user}"',
-                                   user_message=operation_text)
+                                   user_message=source_inputted_text)
                 continue
 
             await edit_message(message=processing_message,
                                text=f"3/3 Определяю данные для Google Tables. Ожидайте...",
-                               user_message=operation_text)
+                               user_message=source_inputted_text)
 
             request_message = request_data(
                 RequestBuilder(
                     message_request=MessageRequest(
-                        user_message=operation_text).basic_request_message,
+                        user_message=source_inputted_text).basic_request_message,
                     response_format=get_response_format_according_to_operation_type(operation_type))
             )
 
@@ -367,7 +367,7 @@ async def voice_message_handler(
             context.user_data["operation_type"] = operation_type
             context.user_data["request_message"] = request_message
             context.user_data["body_text"] = body_text
-            context.user_data["operation_text"] = operation_text
+            context.user_data["source_inputted_text"] = source_inputted_text
 
             if VALIDATION_TEXT in str(request_message):
                 keyboard = get_reply_keyboard_markup(False, True)
@@ -377,7 +377,7 @@ async def voice_message_handler(
             # send message with buttons
             await edit_message(message=processing_message,
                                text=body_text,
-                               user_message=operation_text,
+                               user_message=source_inputted_text,
                                status="ожидание ответа пользователя.",
                                reply_markup=keyboard)
 
