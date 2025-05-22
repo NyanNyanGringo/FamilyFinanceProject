@@ -394,6 +394,7 @@ def run() -> None:
         audio2text_model=Audio2TextModels.whisper,
         # custom_text="1500 динар накопления кофе"
         # custom_text="300 динар кофе"
+        # custom_text="2280 минус 400 динар накопления продукты"
     )
 
     # Привязываем обработчики для разных моделей
