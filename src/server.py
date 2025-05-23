@@ -31,6 +31,9 @@ VALIDATION_TEXT = "(невалидное значение)"
 
 
 class Audio2TextModels:
+    """
+    Класс для выбора модели преобразования аудио в текст.
+    """
     whisper = "whisper"
     vosk = "vosk"
 
@@ -39,6 +42,16 @@ class Audio2TextModels:
 
 
 def replace_last_string(original_text: str, text_to_add: str):
+    """
+    Заменяет последнюю строку в тексте на новую строку.
+
+    Args:
+        original_text (str): Исходный текст.
+        text_to_add (str): Строка для замены последней строки.
+
+    Returns:
+        str: Текст с заменённой последней строкой.
+    """
     texts = original_text.split("\n")
     if len(texts) == 1:
         return text_to_add
@@ -47,6 +60,18 @@ def replace_last_string(original_text: str, text_to_add: str):
 
 
 async def get_text_from_audio(update, context, audio2text_model: Audio2TextModels, custom_text: str = None):
+    """
+    Получает текст из аудиосообщения с помощью выбранной модели.
+
+    Args:
+        update: Объект обновления Telegram.
+        context: Контекст Telegram.
+        audio2text_model (Audio2TextModels): Модель для преобразования аудио в текст.
+        custom_text (str, optional): Пользовательский текст вместо распознавания.
+
+    Returns:
+        str: Распознанный текст.
+    """
     oga_audio_file = await download_voice_message(update, context)
     wav_audio_file = convert_oga_to_wav(oga_audio_file)
 
@@ -61,6 +86,15 @@ async def get_text_from_audio(update, context, audio2text_model: Audio2TextModel
 
 
 def format_json_to_telegram_text(json: dict) -> str:
+    """
+    Форматирует JSON-словарь в текст для Telegram.
+
+    Args:
+        json (dict): Словарь с данными.
+
+    Returns:
+        str: Отформатированный текст для Telegram.
+    """
     text = ""
     for key, value in json.items():
         if value and key not in ["final_answer"]:
@@ -71,6 +105,12 @@ def format_json_to_telegram_text(json: dict) -> str:
 def is_text_has_status(text: str) -> bool:
     """
     Проверяет, есть ли в тексте строка, начинающаяся с "Статус: ".
+
+    Args:
+        text (str): Текст для проверки.
+
+    Returns:
+        bool: True, если статус найден, иначе False.
     """
     text_parts = text.split("\n")
     return any(part.startswith("Статус: ") for part in text_parts)
@@ -79,6 +119,12 @@ def is_text_has_status(text: str) -> bool:
 def remove_status_in_text(text: str) -> str:
     """
     Удаляет строку со статусом из текста, если она существует и находится в последней строке.
+
+    Args:
+        text (str): Текст для обработки.
+
+    Returns:
+        str: Текст без строки статуса.
     """
     text_parts = text.split("\n")
 
@@ -92,6 +138,13 @@ def remove_status_in_text(text: str) -> str:
 def set_status_to_text(text: str, status: str) -> str:
     """
     Устанавливает новый статус в текст. Если статус уже есть, заменяет его.
+
+    Args:
+        text (str): Исходный текст.
+        status (str): Новый статус.
+
+    Returns:
+        str: Текст с обновлённым статусом.
     """
     if is_text_has_status(text):
         # Удаляем старый статус, если он есть
@@ -104,6 +157,19 @@ def set_status_to_text(text: str, status: str) -> str:
 
 async def edit_message(message: Message, text: str, user_message: str = None, status: str = None,
                        reply_markup: InlineKeyboardMarkup = None):
+    """
+    Редактирует сообщение Telegram, добавляя текст, статус и разметку.
+
+    Args:
+        message (Message): Сообщение Telegram для редактирования.
+        text (str): Новый текст сообщения.
+        user_message (str, optional): Исходное сообщение пользователя.
+        status (str, optional): Статус для добавления.
+        reply_markup (InlineKeyboardMarkup, optional): Клавиатура для сообщения.
+
+    Returns:
+        None
+    """
     new_text = ""
     if user_message:
         new_text += f"<code>{user_message}</code>\n\n"
@@ -120,6 +186,17 @@ async def edit_message(message: Message, text: str, user_message: str = None, st
 
 
 async def clarify_operation_type(operation_type, processing_message, source_inputted_text):
+    """
+    Проверяет и возвращает корректный тип операции или сообщает об ошибке.
+
+    Args:
+        operation_type: Тип операции для проверки.
+        processing_message: Сообщение Telegram для вывода ошибок.
+        source_inputted_text: Исходный текст пользователя.
+
+    Returns:
+        OperationTypes | None: Корректный тип операции или None при ошибке.
+    """
     try:
         operation_type = OperationTypes.get_item(operation_type)
         return operation_type
@@ -161,6 +238,15 @@ def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button
 
 
 def get_response_format_according_to_operation_type(operation_type: str) -> dict:
+    """
+    Возвращает формат ответа для указанного типа операции.
+
+    Args:
+        operation_type (str): Тип операции.
+
+    Returns:
+        dict: Формат ответа.
+    """
     if operation_type == OperationTypes.expenses:
         return ResponseFormat().expenses_response_format
     elif operation_type == OperationTypes.incomes:
@@ -174,6 +260,15 @@ def get_response_format_according_to_operation_type(operation_type: str) -> dict
 
 
 def clarify_request_message(request_message: dict) -> dict:
+    """
+    Валидирует и корректирует значения в сообщении запроса.
+
+    Args:
+        request_message (dict): Сообщение с данными для запроса.
+
+    Returns:
+        dict: Валидированное сообщение запроса.
+    """
     # Pairs of keys from request_message and values that request_message key should contain.
     validation_dict = {
         "expenses_category": Category.get_expenses(),

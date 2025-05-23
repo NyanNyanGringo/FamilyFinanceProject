@@ -46,6 +46,12 @@ SPREADSHEET_ID = os.getenv("GOOGLE_SPREADSHEET_ID")
 
 
 def _authenticate_with_google():
+    """
+    Аутентифицирует пользователя с помощью Google OAuth и возвращает объект учётных данных.
+
+    Returns:
+        Credentials: Объект учётных данных Google.
+    """
     token_path = get_google_filepath(GoogleAuthType.TOKEN)
     credentials_path = get_google_filepath(GoogleAuthType.CREDENTIALS)
     old_tokens_path = get_google_filepath(GoogleAuthType.TOKEN_OLD)
@@ -78,6 +84,12 @@ def _authenticate_with_google():
 
 
 def _get_sheet_ids() -> dict:
+    """
+    Получает идентификаторы всех листов в Google Spreadsheet.
+
+    Returns:
+        dict: Словарь с названиями листов и их идентификаторами.
+    """
     request = _SERVICE.spreadsheets().get(spreadsheetId=SPREADSHEET_ID)
     response = request.execute()
 
@@ -103,6 +115,9 @@ _SHEETS_IDS = _get_sheet_ids()
 
 
 class _GoogleBaseEnumClass(Enum):
+    """
+    Базовый класс для перечислений Google с дополнительными методами.
+    """
     def __str__(self):
         return self.value
 
@@ -119,6 +134,9 @@ class _GoogleBaseEnumClass(Enum):
 
 
 class Category:
+    """
+    Класс для работы с категориями расходов, доходов и счетов.
+    """
     _expenses = []  # категории расходов
     _incomes = []  # категории доходов
     _accounts = []  # счета
@@ -160,7 +178,9 @@ class Category:
 
 
 class Formulas(str, _GoogleBaseEnumClass):
-    """Возвращает формулы из Google Tables, которые используются в FamilyFinanceProject"""
+    """
+    Класс-строка для хранения формул Google Tables, используемых в проекте.
+    """
 
     # Месяц: 'Расходы'!B3:B | 'Переводы'!B3:B | 'Доходы'!B3:B
     month = """=LET(
@@ -224,6 +244,9 @@ class Formulas(str, _GoogleBaseEnumClass):
 
 
 class OperationTypes(str, _GoogleBaseEnumClass):
+    """
+    Перечисление типов операций: расходы, переводы, корректировки, доходы.
+    """
     expenses = "Расходы"
     transfers = "Переводы"
     adjustment = "Корректировка"
@@ -231,22 +254,34 @@ class OperationTypes(str, _GoogleBaseEnumClass):
 
 
 class ListName(str, _GoogleBaseEnumClass):
+    """
+    Перечисление названий листов для разных типов операций.
+    """
     expenses = "↙️Расходы"
     transfers = "🔄Переводы"
     incomes = "↗️Доходы"
 
 
 class Status(str, _GoogleBaseEnumClass):
+    """
+    Перечисление статусов операции: подтверждена, запланирована.
+    """
     committed = "Committed"
     planned = "Planned"
 
 
 class TransferType(str, _GoogleBaseEnumClass):
+    """
+    Перечисление типов переводов: перевод, корректировка.
+    """
     transfer = "Transfer"
     adjustment = "Adjustment"
 
 
 class ConfigRange(str, _GoogleBaseEnumClass):
+    """
+    Перечисление диапазонов ячеек для конфигурации Google Sheets.
+    """
     incomes = "*data!AK7:AK199"
     expenses = "*data!AJ7:AJ199"
     accounts = "*data!M7:M199"
@@ -254,6 +289,9 @@ class ConfigRange(str, _GoogleBaseEnumClass):
 
 
 class RequestData(BaseModel):
+    """
+    Дата-класс для хранения данных запроса к Google Sheets.
+    """
     list_name: ListName
     date: int = Field(default_factory=get_google_sheets_current_date)
     incomes_category: Optional[str] = None
@@ -293,6 +331,16 @@ class RequestData(BaseModel):
 
 
 def get_values(cell_range: str or ConfigRange, transform_to_single_list: bool = False) -> list:
+    """
+    Получает значения из Google Sheets по указанному диапазону.
+
+    Args:
+        cell_range (str | ConfigRange): Диапазон ячеек.
+        transform_to_single_list (bool): Преобразовать в одномерный список.
+
+    Returns:
+        list: Список значений из Google Sheets.
+    """
     sheet = _SERVICE.spreadsheets()
     result = (
         sheet.values()
@@ -312,6 +360,19 @@ def get_values(cell_range: str or ConfigRange, transform_to_single_list: bool = 
 
 
 def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) -> dict:
+    """
+    Создает запрос для вставки новой строки в Google Sheets.
+
+    Args:
+        list_name (ListName): Название листа, в который нужно вставить строку.
+        insert_above_row (int): Номер строки, выше которой нужно вставить новую строку.
+
+    Returns:
+        dict: Запрос для вставки строки в формате Google Sheets API.
+
+    Raises:
+        ValueError: Если ID листа не найден или равен 0.
+    """
     sheet_id = _SHEETS_IDS.get(list_name)
     
     # Подробное логирование для отладки
@@ -336,6 +397,18 @@ def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) ->
 
 
 def get_update_cells_request(list_name: ListName, values_to_update: list, row_index: int = 6, column_index: int = 0):
+    """
+    Создает запрос для обновления ячеек в Google Sheets.
+
+    Args:
+        list_name (ListName): Название листа для обновления.
+        values_to_update (list): Список значений для обновления.
+        row_index (int, optional): Индекс начальной строки. По умолчанию 6.
+        column_index (int, optional): Индекс начального столбца. По умолчанию 0.
+
+    Returns:
+        dict: Запрос для обновления ячеек в формате Google Sheets API.
+    """
     update_cells_request = {
         "updateCells": {
             "start": {"sheetId": _SHEETS_IDS.get(list_name),
@@ -349,7 +422,15 @@ def get_update_cells_request(list_name: ListName, values_to_update: list, row_in
 
 
 def get_values_to_update_for_request(request_data: RequestData) -> list:
+    """
+    Формирует список значений для обновления в Google Sheets на основе данных запроса.
 
+    Args:
+        request_data (RequestData): Данные запроса, содержащие информацию для обновления.
+
+    Returns:
+        list: Список значений для обновления в формате Google Sheets API.
+    """
     if request_data.list_name in (ListName.expenses, ListName.incomes):
         if request_data.list_name == ListName.expenses:
             categoty = request_data.expenses_category
@@ -389,7 +470,18 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
 
 
 def insert_and_update_row_batch_update(request_data: RequestData):
+    """
+    Выполняет пакетное обновление Google Sheets: вставляет новую строку и обновляет её значения.
 
+    Args:
+        request_data (RequestData): Данные для обновления таблицы.
+
+    Returns:
+        dict: Ответ от Google Sheets API с результатами выполнения запроса.
+
+    Raises:
+        ValueError: Если данные запроса не прошли валидацию.
+    """
     data_ok, message = request_data.validate_data()
     if not data_ok:
         raise ValueError(message)

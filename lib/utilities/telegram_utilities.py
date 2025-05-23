@@ -11,9 +11,14 @@ async def download_voice_message(
         update: Update,
         context: ContextTypes.DEFAULT_TYPE) -> str:
     """
-    Downloads Telegram voice message to the voice_messages folder in .oga format
-    :
-    :return: path to downloaded voice message
+    Скачивает голосовое сообщение из Telegram в папку voice_messages в формате .oga.
+
+    Args:
+        update (Update): Объект обновления Telegram.
+        context (ContextTypes.DEFAULT_TYPE): Контекст Telegram.
+
+    Returns:
+        str: Путь к скачанному голосовому сообщению.
     """
     file_id = update.message.voice.file_id
     voice_message = await context.bot.get_file(file_id)

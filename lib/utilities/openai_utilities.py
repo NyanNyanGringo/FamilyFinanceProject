@@ -22,6 +22,16 @@ CLIENT = OpenAI()
 
 
 def text2text(prompt: str, model: str = "gpt-4o-mini") -> str:
+    """
+    Отправляет текстовый запрос в OpenAI и возвращает ответ.
+
+    Args:
+        prompt (str): Текстовый запрос для модели.
+        model (str): Название модели OpenAI.
+
+    Returns:
+        str: Ответ модели.
+    """
     response = CLIENT.chat.completions.create(
         model=model,
         messages=[
@@ -37,7 +47,16 @@ def text2text(prompt: str, model: str = "gpt-4o-mini") -> str:
 
 
 def audio2text(audio_path: str, prompt: str = "") -> str:
-    # TODO: задать контекст для перевода аудио-сообщения
+    """
+    Преобразует аудиофайл в текст с помощью OpenAI Whisper.
+
+    Args:
+        audio_path (str): Путь к аудиофайлу.
+        prompt (str): Контекст для распознавания.
+
+    Returns:
+        str: Распознанный текст.
+    """
     audio_file = open(audio_path, "rb")
 
     transcription = CLIENT.audio.transcriptions.create(
@@ -52,6 +71,15 @@ def audio2text(audio_path: str, prompt: str = "") -> str:
 
 
 def audio2text_for_finance(audio_path: str):
+    """
+    Преобразует аудиофайл в текст с финансовым контекстом для FamilyFinanceProject.
+
+    Args:
+        audio_path (str): Путь к аудиофайлу.
+
+    Returns:
+        str: Распознанный текст с учётом категорий расходов, доходов и счетов.
+    """
     prompt = f"Ты помощник, который транскрибирует запрос пользователя о денежной операции. Используй следующие " \
              f"категории расходов, доходов, а также список счетов для лучшего понимания контекста:\n" \
              f"Категории расходов: {google_utilities.get_values(cell_range=ConfigRange.expenses,transform_to_single_list=True)}" \
@@ -519,12 +547,18 @@ def _get_basic_message(user_message) -> list:
 
 
 class MessageRequest:
+    """
+    Класс для формирования сообщений-запросов к OpenAI.
+    """
     def __init__(self, user_message):
         self.finance_operation_request_message: list = _get_finance_operation_message(user_message)
         self.basic_request_message: list = _get_basic_message(user_message)
 
 
 class ResponseFormat:
+    """
+    Класс для хранения форматов ответов для разных типов операций.
+    """
     def __init__(self):
         self.adjustment_response_format: dict = _get_adjustment_response_format()
         self.transfer_response_format: dict = _get_transfer_response_format()
@@ -535,6 +569,9 @@ class ResponseFormat:
 
 
 class Model:
+    """
+    Класс с названиями моделей OpenAI.
+    """
     gpt_4o_mini: str = "gpt-4o-mini"  # 0.15$
     gpt_4o: str = "gpt-4o"  # 2.50$
     o3_mini: str = "o3-mini"  # 1.10$
@@ -545,12 +582,37 @@ class Model:
 
 
 class RequestBuilder(BaseModel):
+    """
+    Дата-класс для построения запроса к OpenAI.
+
+    Args:
+        message_request (list): Сообщение-запрос.
+        response_format (dict): Формат ответа.
+        model (str): Название модели.
+    """
     message_request: list  # use MessageRequest().attribute
     response_format: dict  # use ResponseFormat().attribute
     model: str = Model().gpt_4_1  # use Model().attribute
 
 
 def request_data(request_builder: RequestBuilder) -> dict:
+    """
+    Отправляет запрос к OpenAI API и возвращает ответ в формате JSON.
+
+    Args:
+        request_builder (RequestBuilder): Объект с параметрами запроса к OpenAI.
+
+    Returns:
+        dict: Ответ от OpenAI API в формате JSON.
+
+    Note:
+        Использует следующие параметры для запроса:
+        - temperature: 0.05 (низкая температура для более детерминированных ответов)
+        - max_tokens: 2048 (максимальное количество токенов в ответе)
+        - top_p: 0.25 (вероятностный порог для генерации)
+        - frequency_penalty: 0 (без штрафа за частоту)
+        - presence_penalty: 0 (без штрафа за присутствие)
+    """
     response = CLIENT.chat.completions.create(
         model=request_builder.model,
         messages=request_builder.message_request,

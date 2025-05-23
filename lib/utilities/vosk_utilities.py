@@ -16,6 +16,16 @@ LOGGER = get_logger(__name__)
 
 
 def audio2text(wav_audio_file: str, frames: int = 4000) -> str:
+    """
+    Преобразует аудиофайл в текст с помощью модели Vosk.
+
+    Args:
+        wav_audio_file (str): Путь к WAV аудиофайлу.
+        frames (int, optional): Количество кадров для чтения за раз. По умолчанию 4000.
+
+    Returns:
+        str: Распознанный текст из аудиофайла.
+    """
     model = Model(get_vosk_model_path())
     wf = wave.open(wav_audio_file, "rb")
     rec = KaldiRecognizer(model, wf.getframerate())
