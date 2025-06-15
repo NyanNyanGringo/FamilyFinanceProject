@@ -7,6 +7,9 @@ license = "Proprietary"
 readme = "README.md"
 package-mode = false
 
+[tool.poetry.scripts]
+treeview = "generate_treeview:main"
+
 [tool.poetry.dependencies]
 python = "^3.10"
 python-dotenv = "^1.0.1"
@@ -19,6 +22,9 @@ google-auth-oauthlib = "^1.2.1"
 gspread = "^6.1.2"
 pydantic = "^2.9.2"
 
+
+[tool.poetry.group.dev.dependencies]
+pdoc = "^15.0.4"
 
 [build-system]
 requires = ["poetry-core"]
