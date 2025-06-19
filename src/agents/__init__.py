@@ -6,6 +6,7 @@ from .orchestrator import MainOrchestrator
 from .expense import ExpenseAgent
 from .income import IncomeAgent
 from .transfer import TransferAgent
+from .reply import ReplyAgent
 
 __all__ = [
     'BaseAgent',
@@ -15,4 +16,5 @@ __all__ = [
     'ExpenseAgent',
     'IncomeAgent',
     'TransferAgent',
+    'ReplyAgent',
 ]

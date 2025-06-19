@@ -403,21 +403,35 @@ async def voice_message_handler(
         context: ContextTypes.DEFAULT_TYPE,
         audio2text_model: Audio2TextModels = Audio2TextModels.whisper,
         custom_text: str = None) -> None:
+    
+    # Проверяем, является ли это reply на сообщение бота
+    is_reply = update.message.reply_to_message is not None
+    if is_reply:
+        LOGGER.info(f"Reply detected! Reply to message_id: {update.message.reply_to_message.message_id}")
+        LOGGER.info(f"Reply to message from: {update.message.reply_to_message.from_user.username if update.message.reply_to_message.from_user else 'Unknown'}")
+    
     # Step I. Convert voice message to text.
-    processing_message = await update.message.reply_text("1/3 Конвертирую аудио в текст. Ожидайте...")
-    context.user_data["reply_message"] = processing_message  # save message for next usage
+    # Не показываем промежуточное сообщение для чистого интерфейса
     text_from_audio = await get_text_from_audio(update, context, audio2text_model, custom_text)
     
     # НОВОЕ: Попытка обработать через систему агентов
-    LOGGER.info("Attempting to process through agent system...")
-    agent_processed = await agent_system.process_voice_message(update, context, text_from_audio)
+    LOGGER.info(f"Attempting to process through agent system... (is_reply: {is_reply})")
+    agent_processed = await agent_system.process_voice_message(update, context, text_from_audio, is_reply)
     
     if agent_processed:
         LOGGER.info("Successfully processed by agent system")
         return
     
-    LOGGER.info("Falling back to legacy processing...")
-    # Если агенты не обработали, используем старый код
+    # Старый код отключен - используем только агентов
+    LOGGER.error("Agent system failed to process the message")
+    await update.message.reply_text(
+        "Произошла ошибка при обработке сообщения. Попробуйте еще раз."
+    )
+    return
+    
+    # LEGACY CODE - DISABLED
+    # LOGGER.info("Falling back to legacy processing...")
+    # # Если агенты не обработали, используем старый код
 
     # Step II. First request to ChatGPT: get json data with operation type and text validity.
     # Text will be divided into parts if user ask for few request in one voice message.

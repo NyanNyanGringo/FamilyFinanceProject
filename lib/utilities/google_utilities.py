@@ -303,6 +303,7 @@ class RequestData(BaseModel):
     replenishment_amount: Optional[Union[int, float]] = None
     status: Status = Status.committed
     comment: str = ""
+    message_id: Optional[int] = None  # Telegram message ID для связи с операцией
 
     def validate_data(self) -> (bool, str):
         message = ""
@@ -446,9 +447,20 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
             {"userEnteredValue": {"stringValue": request_data.status}},  # G3
             {"userEnteredValue": {"formulaValue": Formulas.main_sum}},  # H3
             {"userEnteredValue": {"formulaValue": Formulas.main_sum_currency}},  # I3
-            {"userEnteredValue": {"stringValue": request_data.comment}}  # J3
-            # {"userEnteredValue": {"stringValue": request_data.debtor}}  # K3
+            {"userEnteredValue": {"stringValue": request_data.comment}},  # J3
+            {"userEnteredValue": {"stringValue": ""}},  # K3 - пустое значение для столбца debtor
         ]
+        
+        # Добавляем message_id в соответствующий столбец
+        if request_data.list_name == ListName.expenses:
+            # Для расходов - столбец L (индекс 11)
+            if request_data.message_id:
+                values_to_update.append({"userEnteredValue": {"numberValue": request_data.message_id}})
+        elif request_data.list_name == ListName.incomes:
+            # Для доходов - столбец K (индекс 10)
+            if request_data.message_id:
+                values_to_update.append({"userEnteredValue": {"numberValue": request_data.message_id}})
+        
         return values_to_update
 
     elif request_data.list_name == ListName.transfers:
@@ -465,7 +477,11 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
             {"userEnteredValue": {"stringValue": request_data.status}},  # J3
             {"userEnteredValue": {"stringValue": request_data.comment}},  # K3
         ]
-
+        
+        # Для переводов - столбец M (индекс 12)
+        if request_data.message_id:
+            values_to_update.append({"userEnteredValue": {"numberValue": request_data.message_id}})
+        
         return values_to_update
 
 

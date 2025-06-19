@@ -59,14 +59,14 @@ class TransferAgent(BaseAgent):
                     clarification_message=validation_result['message']
                 )
             
-            # Создаём запрос для Google Sheets
-            google_request = self._create_google_request(operation_details, is_adjustment)
-            
-            # Отправляем данные в Google Sheets
-            insert_and_update_row_batch_update(google_request)
-            
             # Формируем успешный ответ
             success_message = self._format_success_message(operation_details, is_adjustment)
+            
+            # Сохраняем данные в контексте для отправки после получения message_id
+            transfer_data = operation_details.copy()
+            transfer_data['is_adjustment'] = is_adjustment
+            request.context.user_data['pending_transfer_data'] = transfer_data
+            request.context.user_data['pending_operation_type'] = 'transfer' if not is_adjustment else 'adjustment'
             
             return self.create_success_response(
                 message=success_message,

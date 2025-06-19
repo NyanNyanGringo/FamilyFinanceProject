@@ -57,6 +57,7 @@ class BaseAgent(ABC):
         self.logger.info(f"{name} agent initialized")
     
     @abstractmethod
+    @abstractmethod
     async def process(self, request: AgentRequest) -> AgentResponse:
         """
         Обработать запрос и вернуть ответ.

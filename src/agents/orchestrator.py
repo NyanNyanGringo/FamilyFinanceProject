@@ -37,6 +37,7 @@ class MainOrchestrator(BaseAgent):
     async def process(self, request: AgentRequest) -> AgentResponse:
         """
         Обработка запроса: определение намерения и делегирование соответствующему агенту.
+        Поддерживает множественные операции.
         
         Args:
             request: Входящий запрос
@@ -45,44 +46,106 @@ class MainOrchestrator(BaseAgent):
             AgentResponse: Ответ от соответствующего агента
         """
         try:
-            # Сохраняем сообщение о процессе обработки
-            self._processing_message = await request.telegram_update.message.reply_text(
-                "1/3 Определяю тип операции. Ожидайте..."
-            )
+            # Определяем операции через OpenAI
+            operations = await self._extract_operations(request.user_message)
             
-            # Определяем тип операции через OpenAI
-            operation_type = await self._determine_operation_type(request.user_message)
+            if not operations:
+                return self.create_error_response("Не удалось определить операции")
             
-            if not operation_type:
-                return self.create_error_response("Не удалось определить тип операции")
-            
-            # Обновляем тип операции в запросе
-            request.operation_type = operation_type
-            
-            # Находим подходящего агента
-            agent = self.agents.get(operation_type)
-            if not agent:
-                return self.create_error_response(
-                    f"Не найден агент для операции типа: {operation_type}"
-                )
-            
-            # Обновляем сообщение
-            await self._update_processing_message(
-                f"2/3 Обрабатываю операцию: {operation_type}. Ожидайте..."
-            )
-            
-            # Делегируем обработку соответствующему агенту
-            self.logger.info(f"Delegating to {agent.name}")
-            response = await agent.process(request)
-            
-            # Удаляем сообщение о процессе обработки
-            if self._processing_message:
+            # Если только одна операция - обрабатываем напрямую без множественной логики
+            if len(operations) == 1:
+                operation = operations[0]
+                operation_type = operation.get("operation_type")
+                
+                # Валидация типа операции
                 try:
-                    await self._processing_message.delete()
-                except Exception as e:
-                    self.logger.warning(f"Could not delete processing message: {str(e)}")
+                    validated_type = OperationTypes.get_item(operation_type)
+                except ValueError:
+                    return self.create_error_response(f"Неверный тип операции: {operation_type}")
+                
+                # Обновляем тип операции в запросе
+                request.operation_type = validated_type
+                
+                # Находим подходящего агента
+                agent = self.agents.get(validated_type)
+                if not agent:
+                    return self.create_error_response(
+                        f"Не найден агент для операции типа: {validated_type}"
+                    )
+                
+                # Делегируем обработку соответствующему агенту
+                self.logger.info(f"Delegating to {agent.name}")
+                response = await agent.process(request)
+                
+                return response
             
-            return response
+            # Для множественных операций используем существующую логику
+            results = []
+            for idx, operation in enumerate(operations):
+                operation_type = operation.get("operation_type")
+                source_text = operation.get("source_inputted_text")
+                
+                if not operation_type or operation_type == "None":
+                    continue
+                
+                # Валидация типа операции
+                try:
+                    validated_type = OperationTypes.get_item(operation_type)
+                except ValueError:
+                    self.logger.error(f"Invalid operation type: {operation_type}")
+                    continue
+                
+                # Создаем новый запрос для этой операции
+                operation_request = AgentRequest(
+                    operation_type=validated_type,
+                    user_message=source_text,
+                    telegram_update=request.telegram_update,
+                    context=request.context
+                )
+                
+                # Находим подходящего агента
+                agent = self.agents.get(validated_type)
+                if not agent:
+                    results.append({
+                        "success": False,
+                        "message": f"Не найден агент для операции типа: {validated_type}"
+                    })
+                    continue
+                
+                # Делегируем обработку соответствующему агенту
+                self.logger.info(f"Delegating operation {idx + 1} to {agent.name}")
+                response = await agent.process(operation_request)
+                
+                # Отправляем результат как отдельное сообщение
+                if response.success:
+                    sent_message = await request.telegram_update.message.reply_text(
+                        response.message,
+                        parse_mode='HTML'
+                    )
+                
+                results.append({
+                    "success": response.success,
+                    "message": response.message,
+                    "data": response.data
+                })
+            
+            # Формируем итоговый ответ
+            if results:
+                success_count = sum(1 for r in results if r['success'])
+                total_count = len(results)
+                
+                if success_count == total_count:
+                    return self.create_success_response(
+                        f"Обработано операций: {success_count}/{total_count}"
+                    )
+                else:
+                    return AgentResponse(
+                        success=True,  # Частичный успех
+                        message=f"Обработано операций: {success_count}/{total_count}",
+                        data={"results": results}
+                    )
+            else:
+                return self.create_error_response("Не найдено операций для обработки")
             
         except Exception as e:
             self.logger.error(f"Error in orchestrator: {str(e)}")
@@ -141,3 +204,38 @@ class MainOrchestrator(BaseAgent):
                 await self._processing_message.edit_text(text)
             except Exception as e:
                 self.logger.warning(f"Could not update message: {str(e)}")
+    
+    async def _extract_operations(self, user_message: str) -> list:
+        """
+        Извлечение всех операций из сообщения пользователя.
+        
+        Args:
+            user_message: Сообщение пользователя
+            
+        Returns:
+            list: Список операций
+        """
+        try:
+            # Используем существующую логику с поддержкой множественных операций
+            finance_operation_request = request_data(
+                RequestBuilder(
+                    message_request=MessageRequest(
+                        user_message=user_message
+                    ).finance_operation_request_message,
+                    response_format=ResponseFormat().finance_operation_response
+                )
+            )
+            
+            # Извлекаем все операции
+            all_operations = []
+            for _, operations in finance_operation_request.items():
+                if operations:
+                    for operation in operations:
+                        if operation.get("user_request_is_relevant", False):
+                            all_operations.append(operation)
+            
+            return all_operations
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting operations: {str(e)}")
+            return []    

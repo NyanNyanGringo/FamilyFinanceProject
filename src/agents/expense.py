@@ -53,14 +53,12 @@ class ExpenseAgent(BaseAgent):
                     clarification_message=validation_result['message']
                 )
             
-            # Создаём запрос для Google Sheets
-            google_request = self._create_google_request(expense_details)
-            
-            # Отправляем данные в Google Sheets
-            insert_and_update_row_batch_update(google_request)
-            
             # Формируем успешный ответ
             success_message = self._format_success_message(expense_details)
+            
+            # Сохраняем данные в контексте для отправки после получения message_id
+            request.context.user_data['pending_expense_data'] = expense_details
+            request.context.user_data['pending_operation_type'] = 'expense'
             
             return self.create_success_response(
                 message=success_message,
@@ -132,12 +130,13 @@ class ExpenseAgent(BaseAgent):
         
         return {'valid': True, 'message': '', 'errors': []}
     
-    def _create_google_request(self, expense_data: dict) -> RequestData:
+    def _create_google_request(self, expense_data: dict, message_id: int = None) -> RequestData:
         """
         Создание запроса для Google Sheets.
         
         Args:
             expense_data: Данные расхода
+            message_id: ID сообщения Telegram
             
         Returns:
             RequestData: Объект запроса для Google Sheets
@@ -148,7 +147,8 @@ class ExpenseAgent(BaseAgent):
             account=expense_data.get('account'),
             amount=expense_data.get('amount'),
             status=expense_data.get('status', Status.committed),
-            comment=expense_data.get('comment', '')
+            comment=expense_data.get('comment', ''),
+            message_id=message_id
         )
     
     def _format_success_message(self, expense_data: dict) -> str:

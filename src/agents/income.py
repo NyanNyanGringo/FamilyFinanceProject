@@ -53,14 +53,12 @@ class IncomeAgent(BaseAgent):
                     clarification_message=validation_result['message']
                 )
             
-            # Создаём запрос для Google Sheets
-            google_request = self._create_google_request(income_details)
-            
-            # Отправляем данные в Google Sheets
-            insert_and_update_row_batch_update(google_request)
-            
             # Формируем успешный ответ
             success_message = self._format_success_message(income_details)
+            
+            # Сохраняем данные в контексте для отправки после получения message_id
+            request.context.user_data['pending_income_data'] = income_details
+            request.context.user_data['pending_operation_type'] = 'income'
             
             return self.create_success_response(
                 message=success_message,
