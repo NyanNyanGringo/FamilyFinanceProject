@@ -14,6 +14,9 @@ from lib.utilities.telegram_utilities import download_voice_message
 from lib.utilities.ffmpeg_utilities import convert_oga_to_wav
 from lib.utilities.vosk_utilities import audio2text
 
+# Импорт системы агентов
+from src.agent_integration import agent_system
+
 # LOGGING
 
 
@@ -404,6 +407,17 @@ async def voice_message_handler(
     processing_message = await update.message.reply_text("1/3 Конвертирую аудио в текст. Ожидайте...")
     context.user_data["reply_message"] = processing_message  # save message for next usage
     text_from_audio = await get_text_from_audio(update, context, audio2text_model, custom_text)
+    
+    # НОВОЕ: Попытка обработать через систему агентов
+    LOGGER.info("Attempting to process through agent system...")
+    agent_processed = await agent_system.process_voice_message(update, context, text_from_audio)
+    
+    if agent_processed:
+        LOGGER.info("Successfully processed by agent system")
+        return
+    
+    LOGGER.info("Falling back to legacy processing...")
+    # Если агенты не обработали, используем старый код
 
     # Step II. First request to ChatGPT: get json data with operation type and text validity.
     # Text will be divided into parts if user ask for few request in one voice message.
