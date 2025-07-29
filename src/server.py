@@ -31,6 +31,9 @@ VALIDATION_TEXT = "(невалидное значение)"
 
 
 class Audio2TextModels:
+    """
+    Класс для выбора модели преобразования аудио в текст.
+    """
     whisper = "whisper"
     vosk = "vosk"
 
@@ -39,6 +42,16 @@ class Audio2TextModels:
 
 
 def replace_last_string(original_text: str, text_to_add: str):
+    """
+    Заменяет последнюю строку в тексте на новую строку.
+
+    Args:
+        original_text (str): Исходный текст.
+        text_to_add (str): Строка для замены последней строки.
+
+    Returns:
+        str: Текст с заменённой последней строкой.
+    """
     texts = original_text.split("\n")
     if len(texts) == 1:
         return text_to_add
@@ -47,6 +60,18 @@ def replace_last_string(original_text: str, text_to_add: str):
 
 
 async def get_text_from_audio(update, context, audio2text_model: Audio2TextModels, custom_text: str = None):
+    """
+    Получает текст из аудиосообщения с помощью выбранной модели.
+
+    Args:
+        update: Объект обновления Telegram.
+        context: Контекст Telegram.
+        audio2text_model (Audio2TextModels): Модель для преобразования аудио в текст.
+        custom_text (str, optional): Пользовательский текст вместо распознавания.
+
+    Returns:
+        str: Распознанный текст.
+    """
     oga_audio_file = await download_voice_message(update, context)
     wav_audio_file = convert_oga_to_wav(oga_audio_file)
 
@@ -61,6 +86,15 @@ async def get_text_from_audio(update, context, audio2text_model: Audio2TextModel
 
 
 def format_json_to_telegram_text(json: dict) -> str:
+    """
+    Форматирует JSON-словарь в текст для Telegram.
+
+    Args:
+        json (dict): Словарь с данными.
+
+    Returns:
+        str: Отформатированный текст для Telegram.
+    """
     text = ""
     for key, value in json.items():
         if value and key not in ["final_answer"]:
@@ -71,6 +105,12 @@ def format_json_to_telegram_text(json: dict) -> str:
 def is_text_has_status(text: str) -> bool:
     """
     Проверяет, есть ли в тексте строка, начинающаяся с "Статус: ".
+
+    Args:
+        text (str): Текст для проверки.
+
+    Returns:
+        bool: True, если статус найден, иначе False.
     """
     text_parts = text.split("\n")
     return any(part.startswith("Статус: ") for part in text_parts)
@@ -79,6 +119,12 @@ def is_text_has_status(text: str) -> bool:
 def remove_status_in_text(text: str) -> str:
     """
     Удаляет строку со статусом из текста, если она существует и находится в последней строке.
+
+    Args:
+        text (str): Текст для обработки.
+
+    Returns:
+        str: Текст без строки статуса.
     """
     text_parts = text.split("\n")
 
@@ -92,6 +138,13 @@ def remove_status_in_text(text: str) -> str:
 def set_status_to_text(text: str, status: str) -> str:
     """
     Устанавливает новый статус в текст. Если статус уже есть, заменяет его.
+
+    Args:
+        text (str): Исходный текст.
+        status (str): Новый статус.
+
+    Returns:
+        str: Текст с обновлённым статусом.
     """
     if is_text_has_status(text):
         # Удаляем старый статус, если он есть
@@ -104,6 +157,19 @@ def set_status_to_text(text: str, status: str) -> str:
 
 async def edit_message(message: Message, text: str, user_message: str = None, status: str = None,
                        reply_markup: InlineKeyboardMarkup = None):
+    """
+    Редактирует сообщение Telegram, добавляя текст, статус и разметку.
+
+    Args:
+        message (Message): Сообщение Telegram для редактирования.
+        text (str): Новый текст сообщения.
+        user_message (str, optional): Исходное сообщение пользователя.
+        status (str, optional): Статус для добавления.
+        reply_markup (InlineKeyboardMarkup, optional): Клавиатура для сообщения.
+
+    Returns:
+        None
+    """
     new_text = ""
     if user_message:
         new_text += f"<code>{user_message}</code>\n\n"
@@ -119,7 +185,18 @@ async def edit_message(message: Message, text: str, user_message: str = None, st
     await message.edit_text(new_text, parse_mode="HTML", reply_markup=reply_markup)
 
 
-async def clarify_operation_type(operation_type, processing_message, operation_text):
+async def clarify_operation_type(operation_type, processing_message, source_inputted_text):
+    """
+    Проверяет и возвращает корректный тип операции или сообщает об ошибке.
+
+    Args:
+        operation_type: Тип операции для проверки.
+        processing_message: Сообщение Telegram для вывода ошибок.
+        source_inputted_text: Исходный текст пользователя.
+
+    Returns:
+        OperationTypes | None: Корректный тип операции или None при ошибке.
+    """
     try:
         operation_type = OperationTypes.get_item(operation_type)
         return operation_type
@@ -127,7 +204,7 @@ async def clarify_operation_type(operation_type, processing_message, operation_t
         await edit_message(message=processing_message,
                            text=f'Тип операции "{operation_type}", который определил ChatGPT, неверный. '
                                 f'Попробуйте перезаписать голосовое сообщение.',
-                           user_message=operation_text)
+                           user_message=source_inputted_text)
 
 
 def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button: bool = True) -> InlineKeyboardMarkup:
@@ -161,6 +238,15 @@ def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button
 
 
 def get_response_format_according_to_operation_type(operation_type: str) -> dict:
+    """
+    Возвращает формат ответа для указанного типа операции.
+
+    Args:
+        operation_type (str): Тип операции.
+
+    Returns:
+        dict: Формат ответа.
+    """
     if operation_type == OperationTypes.expenses:
         return ResponseFormat().expenses_response_format
     elif operation_type == OperationTypes.incomes:
@@ -174,6 +260,15 @@ def get_response_format_according_to_operation_type(operation_type: str) -> dict
 
 
 def clarify_request_message(request_message: dict) -> dict:
+    """
+    Валидирует и корректирует значения в сообщении запроса.
+
+    Args:
+        request_message (dict): Сообщение с данными для запроса.
+
+    Returns:
+        dict: Валидированное сообщение запроса.
+    """
     # Pairs of keys from request_message and values that request_message key should contain.
     validation_dict = {
         "expenses_category": Category.get_expenses(),
@@ -245,13 +340,13 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     user_answer = update.callback_query.data
     operation_type = context.user_data["operation_type"]
     request_message = context.user_data["request_message"]
-    operation_text = context.user_data["operation_text"]
+    source_inputted_text = context.user_data["source_inputted_text"]
     message_text = context.user_data["body_text"]
 
     if user_answer == "reject":
         await edit_message(message=reply_message,
                            text=message_text,
-                           user_message=operation_text,
+                           user_message=source_inputted_text,
                            status="операция отменена 👀")
         return
 
@@ -296,7 +391,7 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
 
     await edit_message(message=reply_message,
                        text=message_text,
-                       user_message=operation_text,
+                       user_message=source_inputted_text,
                        status="подтверждено 👍")
 
 
@@ -330,28 +425,28 @@ async def voice_message_handler(
             LOGGER.info(f"{finance_operation=}")
 
             operation_type: str = finance_operation.get("operation_type")
-            operation_text: str = finance_operation.get("operation_text")
+            source_inputted_text: str = finance_operation.get("source_inputted_text")
             message_to_user: str = finance_operation.get("message_to_user")
             user_request_is_correct: bool = finance_operation.get("user_request_is_relevant")
 
-            operation_type = await clarify_operation_type(operation_type, processing_message, operation_text)
+            operation_type = await clarify_operation_type(operation_type, processing_message, source_inputted_text)
             if not operation_type:
                 continue
 
             if not user_request_is_correct:
                 await edit_message(message=processing_message,
                                    text=f'Запрос некорректен. Ответ ChatGPT: "{message_to_user}"',
-                                   user_message=operation_text)
+                                   user_message=source_inputted_text)
                 continue
 
             await edit_message(message=processing_message,
                                text=f"3/3 Определяю данные для Google Tables. Ожидайте...",
-                               user_message=operation_text)
+                               user_message=source_inputted_text)
 
             request_message = request_data(
                 RequestBuilder(
                     message_request=MessageRequest(
-                        user_message=operation_text).basic_request_message,
+                        user_message=source_inputted_text).basic_request_message,
                     response_format=get_response_format_according_to_operation_type(operation_type))
             )
 
@@ -367,7 +462,7 @@ async def voice_message_handler(
             context.user_data["operation_type"] = operation_type
             context.user_data["request_message"] = request_message
             context.user_data["body_text"] = body_text
-            context.user_data["operation_text"] = operation_text
+            context.user_data["source_inputted_text"] = source_inputted_text
 
             if VALIDATION_TEXT in str(request_message):
                 keyboard = get_reply_keyboard_markup(False, True)
@@ -377,7 +472,7 @@ async def voice_message_handler(
             # send message with buttons
             await edit_message(message=processing_message,
                                text=body_text,
-                               user_message=operation_text,
+                               user_message=source_inputted_text,
                                status="ожидание ответа пользователя.",
                                reply_markup=keyboard)
 
@@ -390,15 +485,18 @@ def run() -> None:
 
     # Используем functools.partial для передачи дополнительного аргумента
     handler_with_vosk = partial(
-        add_row_to_google_tables_based_on_the_voice_message,
-        audio2text_model=Audio2TextModels.whisper
+        voice_message_handler,
+        audio2text_model=Audio2TextModels.whisper,
+        # custom_text="1500 динар накопления кофе"
+        # custom_text="300 динар кофе"
+        # custom_text="2280 минус 400 динар накопления продукты"
     )
 
     # Привязываем обработчики для разных моделей
     application.add_handler(
         MessageHandler(
             filters.VOICE & ~filters.COMMAND,
-            handler_with_args
+            handler_with_vosk
         )
     )
 

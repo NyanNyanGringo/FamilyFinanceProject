@@ -10,6 +10,15 @@ from config import VOSK_MODEL
 
 
 def get_voice_messages_path(create: bool = False) -> str:
+    """
+    Возвращает путь к папке с голосовыми сообщениями. Создаёт папку при необходимости.
+
+    Args:
+        create (bool): Создать папку, если не существует.
+
+    Returns:
+        str: Путь к папке voice_messages.
+    """
     voice_messages_path = os.path.join(_get_root_path(), "voice_messages")
 
     if create:
@@ -19,6 +28,12 @@ def get_voice_messages_path(create: bool = False) -> str:
 
 
 def get_ffmpeg_executable_path() -> str:
+    """
+    Возвращает путь к исполняемому файлу ffmpeg в зависимости от ОС.
+
+    Returns:
+        str: Путь к ffmpeg.
+    """
     system = platform.system()
     
     if system == "Darwin":  # macOS
@@ -33,6 +48,12 @@ def get_ffmpeg_executable_path() -> str:
 
 
 def get_vosk_model_path() -> str:
+    """
+    Возвращает путь к модели Vosk. Бросает ошибку, если модель не найдена.
+
+    Returns:
+        str: Путь к модели Vosk.
+    """
     vosk_model_path = os.path.join(_get_root_path(), "models", VOSK_MODEL)
 
     if not os.path.exists(vosk_model_path):
@@ -41,18 +62,14 @@ def get_vosk_model_path() -> str:
     return vosk_model_path
 
 
-class GoogleAuthType(enum.Enum):
-    CREDENTIALS = "credentials.json"
-    TOKEN = "token.json"
-    TOKEN_OLD = os.path.join("old_tokens", f"token_{datetime.now().strftime('%Y-%m-%d_%Hh-%Mm-%Ss')}.json")
-
-
-def get_google_filepath(auth_type: GoogleAuthType) -> str:
-    return os.path.join(_get_root_path(), "google_credentials", auth_type.value)
-
-
 # private
 
 
 def _get_root_path() -> str:
+    """
+    Возвращает корневой путь проекта.
+
+    Returns:
+        str: Абсолютный путь к корню проекта.
+    """
     return os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))

@@ -1,65 +1,60 @@
 # FamilyFinanceProject
 
+
 ###### Python 3.10
 ###### Requires: OpenAI API-key, Google Tables OAuth 2.0 Client ID and Telegram Bot Token
 
-### From Author:
-Project for personal goals.  
-Most likely you will find some usefully code.
-It will not be possible to use the project as a ready-made solution,
-since access to a Google Sheets custom template for financial management is required.
+
+### Description:
+FamilyFinanceProject is a Telegram bot that manages custom financial Google Sheet.
+
+Core features:
+
+* Create, edit and delete all types of financial operations (incomes, expenses, transfers, adjustments)
+* Use natural language to search, analyze and summarise all the information from Google Sheet like: balance, certain category expenses, account amounts, debts etc.
+* Notifications about: subscriptions, payment periods etc.
+* Weekly, monthly deep breakdowns
+* Weekly Google Sheet backup
+
+Main idea:
+
+User use Google Sheets as financial database and dashboard platform. All the operations take place inside Telegram via voice and text messages. 
+
 
 ### Installation:
 
-Clone the repository:
+1. Clone the repository:
 ```
 git clone https://github.com/NyanNyanGringo/FamilyFinanceProject.git
 ```
 
-Install dependencies:
+2. Install dependencies:
 ```
 poetry install
 ```
 
-#### Install ffmpeg:
-
-##### For Windows:
+3. Install ffmpeg:
 ```
-Download ffmpeg: https://github.com/BtbN/FFmpeg-Builds/releases/tag/autobuild-2024-09-12-14-07
+# windows
+winget install ffmpeg
 
-Version: Auto-Build 2024-09-12 14:07 (or later)
-
-Build used for Windows: ffmpeg-master-latest-win64-gpl.zip
-
-Example structure:
-/ffmpeg
-- /bin
-- /doc
-- /LICENSE.txt
-```
-
-##### For macOS:
-```
+# macos
 brew install ffmpeg
-```
-The application will automatically find the ffmpeg in your PATH.
 
-##### For Linux:
-```
-# Ubuntu/Debian
+# linux
 sudo apt-get install ffmpeg
-
-# CentOS/RHEL
-sudo yum install ffmpeg
 ```
 
-Rename the `.env.example` file to `.env` and specify the required values in it.
+4. Rename the `.env.example` file to `.env` and specify the required values in it:
+```
+cp .env.example .env
+```
 
-Place `credentials.json` file from your Google Cloud Project to google_credentials folder.
+5. Place `credentials.json` file from your Google Cloud Project to google_credentials folder.
 After running app you have to authorize in Google and `token.json` file will be automatically
 created in the same directory.
 
-Place the necessary vosk models in the models folder
+6. (optional) Place the necessary vosk models in the models folder
 (if you don't plan to use vosk and prefer whisper, skip this step):
 ```
 Download models: https://github.com/alphacep/vosk-space/blob/master/models.md

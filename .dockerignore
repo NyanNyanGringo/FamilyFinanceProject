@@ -4,8 +4,6 @@
 
 # Folders
 venv
-.idea
-.vscode
 voice_messages
 
 # MacOS Files

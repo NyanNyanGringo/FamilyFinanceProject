@@ -16,7 +16,6 @@
 import logging
 
 import os
-import shutil
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Union, Optional
@@ -24,14 +23,12 @@ from typing import Union, Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials, exceptions
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 from lib.utilities.date_utilities import get_google_sheets_current_date
-from lib.utilities.os_utilities import get_google_filepath, GoogleAuthType
 from config import GOOGLE_SCOPES
+from lib.utilities.os_utilities import _get_root_path
 
 
 # LOGGING
@@ -46,38 +43,29 @@ SPREADSHEET_ID = os.getenv("GOOGLE_SPREADSHEET_ID")
 
 
 def _authenticate_with_google():
-    token_path = get_google_filepath(GoogleAuthType.TOKEN)
-    credentials_path = get_google_filepath(GoogleAuthType.CREDENTIALS)
-    old_tokens_path = get_google_filepath(GoogleAuthType.TOKEN_OLD)
+    """
+    Аутентифицирует пользователя с помощью Google Service Account и возвращает объект учётных данных.
 
-    creds = None
-    # The file token.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if os.path.exists(token_path):
-        creds = Credentials.from_authorized_user_file(token_path, GOOGLE_SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-            except exceptions.RefreshError:
-                os.makedirs(os.path.dirname(old_tokens_path), exist_ok=True)
-                shutil.move(token_path, old_tokens_path)
-                creds = None
-        if not creds:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                credentials_path, GOOGLE_SCOPES
-            )
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with open(token_path, "w") as token:
-            token.write(creds.to_json())
-
+    Returns:
+        Credentials: Объект учётных данных Google.
+    """
+    service_account_path = os.path.join(_get_root_path(), ".google_service_account_credentials.json")
+    
+    if not os.path.exists(service_account_path):
+        raise FileNotFoundError(f"Service Account key file not found at: {service_account_path}")
+    
+    creds = Credentials.from_service_account_file(service_account_path, scopes=GOOGLE_SCOPES)
+    
     return creds
 
 
 def _get_sheet_ids() -> dict:
+    """
+    Получает идентификаторы всех листов в Google Spreadsheet.
+
+    Returns:
+        dict: Словарь с названиями листов и их идентификаторами.
+    """
     request = _SERVICE.spreadsheets().get(spreadsheetId=SPREADSHEET_ID)
     response = request.execute()
 
@@ -88,7 +76,11 @@ def _get_sheet_ids() -> dict:
 
         sheet_ids[title] = sheet_id
 
-    LOGGER.info(sheet_ids)
+    LOGGER.info(f"Sheet IDs: {sheet_ids}")
+    
+    # Подробное логирование для отладки
+    for name, id in sheet_ids.items():
+        LOGGER.info(f"Sheet: '{name}', ID: {id}")
 
     return sheet_ids
 
@@ -99,6 +91,9 @@ _SHEETS_IDS = _get_sheet_ids()
 
 
 class _GoogleBaseEnumClass(Enum):
+    """
+    Базовый класс для перечислений Google с дополнительными методами.
+    """
     def __str__(self):
         return self.value
 
@@ -115,6 +110,9 @@ class _GoogleBaseEnumClass(Enum):
 
 
 class Category:
+    """
+    Класс для работы с категориями расходов, доходов и счетов.
+    """
     _expenses = []  # категории расходов
     _incomes = []  # категории доходов
     _accounts = []  # счета
@@ -148,39 +146,83 @@ class Category:
             cls._incomes = get_values(cell_range=ConfigRange.incomes, transform_to_single_list=True)
             cls._accounts = get_values(cell_range=ConfigRange.accounts, transform_to_single_list=True)
             cls._last_update_time = datetime.now()
+            LOGGER.info(f"{cls._expenses=}")
+            LOGGER.info(f"{cls._incomes=}")
+            LOGGER.info(f"{cls._accounts=}")
         else:
             LOGGER.info("Update not required: Less than 5 minutes since the last update.")
 
 
 class Formulas(str, _GoogleBaseEnumClass):
-    """Возвращает формулы из Google Tables, которые используются в FamilyFinanceProject"""
+    """
+    Класс-строка для хранения формул Google Tables, используемых в проекте.
+    """
 
     # Месяц: 'Расходы'!B3:B | 'Переводы'!B3:B | 'Доходы'!B3:B
-    month = """=DATE(TEXT($A3, "YYYY"), TEXT($A3, "M"), 1)"""
+    month = """=LET(
+  _date,
+  INDEX($A:$A, ROW()),
+  DATE(VALUE(TEXT(_date, "YYYY")), VALUE(TEXT(_date, "M")), 1)
+  )
+"""
 
     # Сумма (Валюта): 'Расходы'!F3:F | 'Переводы'!G3:G | 'Доходы'!F3:F
-    sum_currency = """=IF($D3<>"", VLOOKUP($D3, '*config'!J:K, 2, ""), "?")"""
+    sum_currency = """=IFERROR(
+  VLOOKUP(
+    INDEX($D:$D, ROW()),
+    {_account_fullnames, _account_currency_codes},
+    2,
+    FALSE
+    ),
+  "?"
+  )"""
 
-    # Сумма списания в основной валюте: 'Переводы'!H3:H
-    write_off_main_sum = """=IF(AND($D3<>"", $F3<>0), ROUND($F3 * VLOOKUP(VLOOKUP($D3, '*config'!J:K, 2, FALSE),
-    '*config'!F:H, 3, FALSE), '*config'!$A$5), 0)"""
+    # Сумма пополнения в основной валюте: 'Переводы'!I3:
+    replenishment_main_sum = """=IFERROR(
+  VLOOKUP(
+    INDEX($E:$E, ROW()),
+    {_account_fullnames, _account_currency_codes},
+    2,
+    FALSE
+    ),
+  "?"
+  )"""
 
-    # Сумма пополнения / Корректировки (Валюта): 'Переводы'!J3:J
-    replenishment_currency_sum = """=IF($E3<>"", VLOOKUP($E3, '*config'!I:J, 2, ""), "?")"""
-
-    # Сумма пополнения в основной валюте: 'Переводы'!K3:K
-    replenishment_main_sum = """=IF(AND($E3<>"", $I3<>0), ROUND($I3 * VLOOKUP(VLOOKUP($E3, '*config'!J:K, 2, FALSE),
-    '*config'!F:H, 3, FALSE), '*config'!$A$5), 0)"""
+    # Сумма пополнения (Валюта): 'Переводы'!I3:I
+    replenishment_currency_sum = """=IFERROR(
+  VLOOKUP(
+    INDEX($E:$E, ROW()),
+    {_account_fullnames, _account_currency_codes},
+    2,
+    FALSE
+    ),
+  "?"
+  )"""
 
     # Сумма в основной валюте: 'Расходы'!H3:H | 'Доходы'!H3:H
-    main_sum = """=IF($D3<>"", ROUND($E3 * VLOOKUP(VLOOKUP($D3, '*config'!J:K, 2, FALSE),
-    '*config'!F:H, 3, FALSE), '*config'!$A$5), 0)"""
+    main_sum = """=IF(
+  INDEX($D:$D, ROW())<>"",
+  IFERROR(
+    ROUND(
+      INDEX($E:$E, ROW()) * VLOOKUP(VLOOKUP(INDEX($D:$D, ROW()), {_account_fullnames, _account_currency_codes}, 2, FALSE), _currencies, 3, FALSE), _userconfig_round_to),
+    "ERROR"
+  ),
+  ""
+)
+"""
 
     # Сумма в основной валюте (Валюта): 'Расходы'!I3:I | 'Доходы'!I3:I
-    main_sum_currency = """=IF($D3<>"", '*config'!$I$5, "?")"""
+    main_sum_currency = """=IF(
+    INDEX($D:$D, ROW())<>"",
+    main_currency,
+    "?"
+    )"""
 
 
 class OperationTypes(str, _GoogleBaseEnumClass):
+    """
+    Перечисление типов операций: расходы, переводы, корректировки, доходы.
+    """
     expenses = "Расходы"
     transfers = "Переводы"
     adjustment = "Корректировка"
@@ -188,29 +230,44 @@ class OperationTypes(str, _GoogleBaseEnumClass):
 
 
 class ListName(str, _GoogleBaseEnumClass):
-    expenses = "Расходы"
-    transfers = "Переводы"
-    incomes = "Доходы"
+    """
+    Перечисление названий листов для разных типов операций.
+    """
+    expenses = "↙️Расходы"
+    transfers = "🔄Переводы"
+    incomes = "↗️Доходы"
 
 
 class Status(str, _GoogleBaseEnumClass):
+    """
+    Перечисление статусов операции: подтверждена, запланирована.
+    """
     committed = "Committed"
     planned = "Planned"
 
 
 class TransferType(str, _GoogleBaseEnumClass):
+    """
+    Перечисление типов переводов: перевод, корректировка.
+    """
     transfer = "Transfer"
     adjustment = "Adjustment"
 
 
 class ConfigRange(str, _GoogleBaseEnumClass):
-    incomes = "*config!B5:B105"
-    expenses = "*config!C5:E105"
-    currencies = "*config!F5:I105"
-    accounts = "*config!J5:L105"
+    """
+    Перечисление диапазонов ячеек для конфигурации Google Sheets.
+    """
+    incomes = "*data!AK7:AK199"
+    expenses = "*data!AJ7:AJ199"
+    accounts = "*data!M7:M199"
+    # currencies = "*data!F5:I105"
 
 
 class RequestData(BaseModel):
+    """
+    Дата-класс для хранения данных запроса к Google Sheets.
+    """
     list_name: ListName
     date: int = Field(default_factory=get_google_sheets_current_date)
     incomes_category: Optional[str] = None
@@ -250,6 +307,16 @@ class RequestData(BaseModel):
 
 
 def get_values(cell_range: str or ConfigRange, transform_to_single_list: bool = False) -> list:
+    """
+    Получает значения из Google Sheets по указанному диапазону.
+
+    Args:
+        cell_range (str | ConfigRange): Диапазон ячеек.
+        transform_to_single_list (bool): Преобразовать в одномерный список.
+
+    Returns:
+        list: Список значений из Google Sheets.
+    """
     sheet = _SERVICE.spreadsheets()
     result = (
         sheet.values()
@@ -269,9 +336,33 @@ def get_values(cell_range: str or ConfigRange, transform_to_single_list: bool = 
 
 
 def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) -> dict:
+    """
+    Создает запрос для вставки новой строки в Google Sheets.
+
+    Args:
+        list_name (ListName): Название листа, в который нужно вставить строку.
+        insert_above_row (int): Номер строки, выше которой нужно вставить новую строку.
+
+    Returns:
+        dict: Запрос для вставки строки в формате Google Sheets API.
+
+    Raises:
+        ValueError: Если ID листа не найден или равен 0.
+    """
+    sheet_id = _SHEETS_IDS.get(list_name)
+    
+    # Подробное логирование для отладки
+    LOGGER.info(f"Getting sheet_id for list_name: '{list_name}' (type: {type(list_name)})")
+    LOGGER.info(f"Available sheet keys: {list(_SHEETS_IDS.keys())}")
+    LOGGER.info(f"Sheet ID found: {sheet_id}")
+    
+    if sheet_id is None or sheet_id == 0:
+        # Если ID не найден или равен 0, выведем ошибку
+        raise ValueError(f"Invalid sheet ID {sheet_id} for list name '{list_name}'. Available sheets: {list(_SHEETS_IDS.keys())}")
+    
     insert_row_above_request = {
         "insertDimension": {
-            "range": {"sheetId": _SHEETS_IDS.get(list_name),
+            "range": {"sheetId": sheet_id,
                       "dimension": "ROWS",
                       "startIndex": insert_above_row - 1,
                       "endIndex": insert_above_row},
@@ -281,7 +372,19 @@ def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) ->
     return insert_row_above_request
 
 
-def get_update_cells_request(list_name: ListName, values_to_update: list, row_index: int = 2, column_index: int = 0):
+def get_update_cells_request(list_name: ListName, values_to_update: list, row_index: int = 6, column_index: int = 0):
+    """
+    Создает запрос для обновления ячеек в Google Sheets.
+
+    Args:
+        list_name (ListName): Название листа для обновления.
+        values_to_update (list): Список значений для обновления.
+        row_index (int, optional): Индекс начальной строки. По умолчанию 6.
+        column_index (int, optional): Индекс начального столбца. По умолчанию 0.
+
+    Returns:
+        dict: Запрос для обновления ячеек в формате Google Sheets API.
+    """
     update_cells_request = {
         "updateCells": {
             "start": {"sheetId": _SHEETS_IDS.get(list_name),
@@ -295,7 +398,15 @@ def get_update_cells_request(list_name: ListName, values_to_update: list, row_in
 
 
 def get_values_to_update_for_request(request_data: RequestData) -> list:
+    """
+    Формирует список значений для обновления в Google Sheets на основе данных запроса.
 
+    Args:
+        request_data (RequestData): Данные запроса, содержащие информацию для обновления.
+
+    Returns:
+        list: Список значений для обновления в формате Google Sheets API.
+    """
     if request_data.list_name in (ListName.expenses, ListName.incomes):
         if request_data.list_name == ListName.expenses:
             categoty = request_data.expenses_category
@@ -312,6 +423,7 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
             {"userEnteredValue": {"formulaValue": Formulas.main_sum}},  # H3
             {"userEnteredValue": {"formulaValue": Formulas.main_sum_currency}},  # I3
             {"userEnteredValue": {"stringValue": request_data.comment}}  # J3
+            # {"userEnteredValue": {"stringValue": request_data.debtor}}  # K3
         ]
         return values_to_update
 
@@ -324,25 +436,34 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
             {"userEnteredValue": {"stringValue": request_data.replenishment_account}},  # E3
             {"userEnteredValue": {"numberValue": request_data.amount}},  # F3
             {"userEnteredValue": {"formulaValue": Formulas.sum_currency}},  # G3
-            {"userEnteredValue": {"formulaValue": Formulas.write_off_main_sum}},  # H3
-            {"userEnteredValue": {"numberValue": request_data.replenishment_amount}},  # I3
-            {"userEnteredValue": {"formulaValue": Formulas.replenishment_currency_sum}},  # J3
-            {"userEnteredValue": {"formulaValue": Formulas.replenishment_main_sum}},  # K3
-            {"userEnteredValue": {"stringValue": request_data.status}},  # L3
-            {"userEnteredValue": {"stringValue": request_data.comment}},  # M3
+            {"userEnteredValue": {"numberValue": request_data.replenishment_amount}},  # H3
+            {"userEnteredValue": {"formulaValue": Formulas.replenishment_currency_sum}},  # I3
+            {"userEnteredValue": {"stringValue": request_data.status}},  # J3
+            {"userEnteredValue": {"stringValue": request_data.comment}},  # K3
         ]
 
         return values_to_update
 
 
 def insert_and_update_row_batch_update(request_data: RequestData):
+    """
+    Выполняет пакетное обновление Google Sheets: вставляет новую строку и обновляет её значения.
 
+    Args:
+        request_data (RequestData): Данные для обновления таблицы.
+
+    Returns:
+        dict: Ответ от Google Sheets API с результатами выполнения запроса.
+
+    Raises:
+        ValueError: Если данные запроса не прошли валидацию.
+    """
     data_ok, message = request_data.validate_data()
     if not data_ok:
         raise ValueError(message)
 
     insert_row_request = get_insert_row_above_request(list_name=request_data.list_name,
-                                                      insert_above_row=3)
+                                                      insert_above_row=7)
 
     update_cells_request = get_update_cells_request(list_name=request_data.list_name,
                                                     values_to_update=get_values_to_update_for_request(request_data))

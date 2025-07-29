@@ -3,6 +3,15 @@ import os
 
 
 def get_logger(name: str = "main"):
+    """
+    Создаёт и возвращает логгер с заданным именем.
+
+    Args:
+        name (str): Имя логгера.
+
+    Returns:
+        logging.Logger: Объект логгера.
+    """
     # Проверяем, существует ли логгер с таким именем
     logger = logging.getLogger(name)
     if not logger.hasHandlers():
