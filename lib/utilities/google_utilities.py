@@ -16,7 +16,6 @@
 import logging
 
 import os
-import shutil
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import Union, Optional
@@ -24,14 +23,12 @@ from typing import Union, Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
-from google.auth.transport.requests import Request
-from google.oauth2.credentials import Credentials, exceptions
-from google_auth_oauthlib.flow import InstalledAppFlow
+from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 
 from lib.utilities.date_utilities import get_google_sheets_current_date
-from lib.utilities.os_utilities import get_google_filepath, GoogleAuthType
 from config import GOOGLE_SCOPES
+from lib.utilities.os_utilities import _get_root_path
 
 
 # LOGGING
@@ -47,39 +44,18 @@ SPREADSHEET_ID = os.getenv("GOOGLE_SPREADSHEET_ID")
 
 def _authenticate_with_google():
     """
-    Аутентифицирует пользователя с помощью Google OAuth и возвращает объект учётных данных.
+    Аутентифицирует пользователя с помощью Google Service Account и возвращает объект учётных данных.
 
     Returns:
         Credentials: Объект учётных данных Google.
     """
-    token_path = get_google_filepath(GoogleAuthType.TOKEN)
-    credentials_path = get_google_filepath(GoogleAuthType.CREDENTIALS)
-    old_tokens_path = get_google_filepath(GoogleAuthType.TOKEN_OLD)
-
-    creds = None
-    # The file token.json stores the user's access and refresh tokens, and is
-    # created automatically when the authorization flow completes for the first
-    # time.
-    if os.path.exists(token_path):
-        creds = Credentials.from_authorized_user_file(token_path, GOOGLE_SCOPES)
-    # If there are no (valid) credentials available, let the user log in.
-    if not creds or not creds.valid:
-        if creds and creds.expired and creds.refresh_token:
-            try:
-                creds.refresh(Request())
-            except exceptions.RefreshError:
-                os.makedirs(os.path.dirname(old_tokens_path), exist_ok=True)
-                shutil.move(token_path, old_tokens_path)
-                creds = None
-        if not creds:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                credentials_path, GOOGLE_SCOPES
-            )
-            creds = flow.run_local_server(port=0)
-        # Save the credentials for the next run
-        with open(token_path, "w") as token:
-            token.write(creds.to_json())
-
+    service_account_path = os.path.join(_get_root_path(), ".google_service_account_credentials.json")
+    
+    if not os.path.exists(service_account_path):
+        raise FileNotFoundError(f"Service Account key file not found at: {service_account_path}")
+    
+    creds = Credentials.from_service_account_file(service_account_path, scopes=GOOGLE_SCOPES)
+    
     return creds
 
 

@@ -1,0 +1,18 @@
+# Development overrides for docker-compose.yml
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
+
+services:
+  familyfinance-bot:
+    environment:
+      - DEV=true
+      - PYTHONUNBUFFERED=1
+    
+    restart: "no"
+    
+    volumes:
+      - ./src:/app/src:ro
+      - ./lib:/app/lib:ro
+      - ./run_server.py:/app/run_server.py:ro
+      - ./config.py:/app/config.py:ro
+      - ./.google_service_account_credentials.json:/app/.google_service_account_credentials.json:ro
+      - ./voice_messages:/app/voice_messages

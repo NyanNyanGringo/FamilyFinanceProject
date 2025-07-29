@@ -1,0 +1,18 @@
+services:
+  familyfinance-bot:
+    build: .
+    container_name: familyfinance-bot
+    restart: unless-stopped
+    
+    env_file:
+      - .env
+    
+    volumes:
+      - ./.google_service_account_credentials.json:/app/.google_service_account_credentials.json:ro
+      - ./voice_messages:/app/voice_messages
+    
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3

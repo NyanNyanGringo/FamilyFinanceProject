@@ -62,28 +62,6 @@ def get_vosk_model_path() -> str:
     return vosk_model_path
 
 
-class GoogleAuthType(enum.Enum):
-    """
-    Перечисление типов файлов авторизации Google.
-    """
-    CREDENTIALS = "credentials.json"
-    TOKEN = "token.json"
-    TOKEN_OLD = os.path.join("old_tokens", f"token_{datetime.now().strftime('%Y-%m-%d_%Hh-%Mm-%Ss')}.json")
-
-
-def get_google_filepath(auth_type: GoogleAuthType) -> str:
-    """
-    Возвращает путь к файлу авторизации Google по типу.
-
-    Args:
-        auth_type (GoogleAuthType): Тип файла авторизации.
-
-    Returns:
-        str: Путь к файлу авторизации.
-    """
-    return os.path.join(_get_root_path(), "google_credentials", auth_type.value)
-
-
 # private
 
 

@@ -3,7 +3,7 @@
 Этот документ содержит полную структуру проекта с информацией о файлах, классах и функциях.
 Обновляется автоматически после внесения изменений в проект.
 
-**Последнее обновление:** 2025-06-14 19:20:01
+**Последнее обновление:** 2025-07-27 12:32:00
 **Версия скрипта:** v002
 
 ## Структура проекта
@@ -16,23 +16,6 @@
     ├── 📄 `config.py`
     │     📍 Путь: `config.py`
     ├── 📄 `conversationbot`
-    ├── 📄 `generate_treeview.py` - 1 класс(ов), 1 функций
-    │     📍 Путь: `generate_treeview.py`
-    │     ⚡ `main()` (строка 488)
-    │       📝 Главная функция.
-    │     🏛️ `TreeViewGenerator` (строка 17)
-    │       └─ `__init__(self, project_root)` (строка 18) [magic]
-    │       └─ `should_ignore(self, path)` (строка 48)
-    │       └─ `get_function_signature(self, node)` (строка 78)
-    │       └─ `extract_python_structure(self, file_path)` (строка 118)
-    │       └─ `_get_node_name(self, node)` (строка 191)
-    │       └─ `_get_decorator_name(self, decorator)` (строка 202)
-    │       └─ `build_tree(self, directory, prefix='', is_last=True)` (строка 213)
-    │       └─ `generate_markdown(self)` (строка 330)
-    │       └─ `_get_timestamp(self)` (строка 381)
-    │       └─ `_generate_statistics(self)` (строка 386)
-    │       └─ `generate(self, output_path)` (строка 462)
-    │       └─ `_count_files(self)` (строка 476)
     ├── 📄 `gpt.sh`
     ├── 📄 `install.sh`
     ├── 📄 `prepare-commit-msg.sh`
@@ -43,10 +26,10 @@
     │     📍 Путь: `test.py`
     │     ⚡ `parse_ftp_log(file_path)` (строка 5)
     │       📝 Parse an FTP log file to generate upload statistics by user.
-    ├── 📁 **docs/** `/Users/user/github/FamilyFinanceProject/docs`
-    │   ├── 📄 `PRD.md`
-    │   ├── 📄 `TreeView.md`
-    │   └── 📄 `treeview_usage.md`
+    ├── 📁 **aidocs/** `/Users/user/github/FamilyFinanceProject/aidocs`
+    │   ├── 📄 `how_to_tree_view.md`
+    │   ├── 📄 `prd.md`
+    │   └── 📄 `treeview.md`
     ├── 📁 **lib/** `/Users/user/github/FamilyFinanceProject/lib`
     │   └── 📁 **utilities/** `/Users/user/github/FamilyFinanceProject/lib/utilities`
     │       ├── 📄 `date_utilities.py` - 1 функций
@@ -153,6 +136,24 @@
     │               📝 Преобразует аудиофайл в текст с помощью модели Vosk.
     ├── 📁 **models/** `/Users/user/github/FamilyFinanceProject/models`
     │   └── 📄 `.gitkeep`
+    ├── 📁 **scripts/** `/Users/user/github/FamilyFinanceProject/scripts`
+    │   └── 📄 `generate_treeview.py` - 1 класс(ов), 1 функций
+    │         📍 Путь: `scripts/generate_treeview.py`
+    │         ⚡ `main()` (строка 488)
+    │           📝 Главная функция.
+    │         🏛️ `TreeViewGenerator` (строка 17)
+    │           └─ `__init__(self, project_root)` (строка 18) [magic]
+    │           └─ `should_ignore(self, path)` (строка 48)
+    │           └─ `get_function_signature(self, node)` (строка 78)
+    │           └─ `extract_python_structure(self, file_path)` (строка 118)
+    │           └─ `_get_node_name(self, node)` (строка 191)
+    │           └─ `_get_decorator_name(self, decorator)` (строка 202)
+    │           └─ `build_tree(self, directory, prefix='', is_last=True)` (строка 213)
+    │           └─ `generate_markdown(self)` (строка 330)
+    │           └─ `_get_timestamp(self)` (строка 381)
+    │           └─ `_generate_statistics(self)` (строка 386)
+    │           └─ `generate(self, output_path)` (строка 462)
+    │           └─ `_count_files(self)` (строка 476)
     └── 📁 **src/** `/Users/user/github/FamilyFinanceProject/src`
         ├── 📄 `server.py` - 1 класс(ов), 9 функций
         │     📍 Путь: `src/server.py`
@@ -195,7 +196,7 @@
 
 - **Всего файлов:** 25
 - **Python файлов:** 13
-- **Строк кода:** 3,616
+- **Строк кода:** 3,679
 - **Классов:** 16
 - **Функций:** 38
 - **Методов:** 23

@@ -487,15 +487,15 @@ class TreeViewGenerator:
 
 def main():
     """Главная функция."""
-    project_root = Path(__file__).parent
-    docs_path = project_root / "docs"
+    project_root = Path(__file__).parent.parent
+    docs_path = project_root / "aidocs"
     
-    # Создаем директорию docs, если её нет
+    # Создаем директорию aidocs, если её нет
     docs_path.mkdir(exist_ok=True)
     
     # Генерируем TreeView.md
     generator = TreeViewGenerator(str(project_root))
-    generator.generate(str(docs_path / "TreeView.md"))
+    generator.generate(str(docs_path / "treeview.md"))
     
     print("\n📌 Для автоматического обновления TreeView.md после изменений,")
     print("   запускайте: poetry run python generate_treeview.py")
