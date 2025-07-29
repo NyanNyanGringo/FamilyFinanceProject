@@ -9,7 +9,6 @@ services:
     
     volumes:
       - ./.google_service_account_credentials.json:/app/.google_service_account_credentials.json:ro
-      - ./voice_messages:/app/voice_messages
     
     healthcheck:
       test: ["CMD", "/usr/local/bin/healthcheck.sh"]
