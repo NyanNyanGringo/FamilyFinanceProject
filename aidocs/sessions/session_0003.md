@@ -242,3 +242,14 @@ Created simple deployment solution using Docker Context approach:
 - Same commands work locally and remotely
 
 **Solution Status:** ✅ **COMPLETE** - Simple, modern, one-command VPS deployment ready
+
+[2025-07-29 21:50]  
+**VPS Deployment Issue - Permissions Fix:**
+Container restarting due to entrypoint script failing on chmod permissions for mounted volume.
+
+**Issue:** `chmod: changing permissions of '/app/voice_messages': Operation not permitted`
+**Root Cause:** Entrypoint script using `set -e` causes exit on chmod failure with mounted volumes
+**Fix Applied:** Modified entrypoint script to handle permission errors gracefully:
+- Changed chmod to use `2>/dev/null` to suppress errors
+- Added conditional logic to warn but not fail on permission issues
+- Container needs rebuild to apply updated entrypoint script
