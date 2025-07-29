@@ -78,12 +78,20 @@ check_credentials() {
 create_directories() {
     log "Creating necessary directories..."
     
-    mkdir -p /app/voice_messages
+    # Create voice_messages directory if it doesn't exist
+    if [ ! -d "/app/voice_messages" ]; then
+        mkdir -p /app/voice_messages
+        log "Created voice_messages directory"
+    fi
     
-    # Set proper permissions
-    chmod 755 /app/voice_messages
+    # Try to set permissions, but don't fail if we can't (volume mount case)
+    if chmod 755 /app/voice_messages 2>/dev/null; then
+        log "Set permissions for voice_messages directory"
+    else
+        log_warning "Could not set permissions for voice_messages (likely mounted volume - this is OK)"
+    fi
     
-    log_success "Directories created successfully"
+    log_success "Directories setup complete"
 }
 
 # Audio cleanup functionality removed - voice messages will accumulate
