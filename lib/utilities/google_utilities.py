@@ -264,6 +264,7 @@ class RequestData(BaseModel):
     replenishment_amount: Optional[Union[int, float]] = None
     status: Status = Status.committed
     comment: str = ""
+    telegram_message_id: Optional[str] = None
 
     def validate_data(self) -> (bool, str):
         message = ""
@@ -407,9 +408,23 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
             {"userEnteredValue": {"stringValue": request_data.status}},  # G3
             {"userEnteredValue": {"formulaValue": Formulas.main_sum}},  # H3
             {"userEnteredValue": {"formulaValue": Formulas.main_sum_currency}},  # I3
-            {"userEnteredValue": {"stringValue": request_data.comment}}  # J3
-            # {"userEnteredValue": {"stringValue": request_data.debtor}}  # K3
+            {"userEnteredValue": {"stringValue": request_data.comment}},  # J3
+            # {"userEnteredValue": {"stringValue": request_data.debtor}},  # K3
         ]
+        
+        # Add Telegram message ID to appropriate column based on list type
+        if request_data.telegram_message_id:
+            if request_data.list_name == ListName.expenses:
+                # Add empty cell for K3 (debtor) and telegram_message_id for L3
+                values_to_update.extend([
+                    {"userEnteredValue": {"stringValue": ""}},  # K3 - debtor
+                    {"userEnteredValue": {"stringValue": request_data.telegram_message_id}}  # L3
+                ])
+            elif request_data.list_name == ListName.incomes:
+                # Add telegram_message_id for K3
+                values_to_update.append(
+                    {"userEnteredValue": {"stringValue": request_data.telegram_message_id}}  # K3
+                )
         return values_to_update
 
     elif request_data.list_name == ListName.transfers:
@@ -426,8 +441,87 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
             {"userEnteredValue": {"stringValue": request_data.status}},  # J3
             {"userEnteredValue": {"stringValue": request_data.comment}},  # K3
         ]
+        
+        # Add Telegram message ID for transfers in column M
+        if request_data.telegram_message_id:
+            values_to_update.extend([
+                {"userEnteredValue": {"boolValue": False}},  # L3 - "Долг возвращен"
+                {"userEnteredValue": {"stringValue": request_data.telegram_message_id}}  # M3
+            ])
 
         return values_to_update
+
+
+def delete_row_by_telegram_id(list_name: ListName, telegram_message_id: str) -> bool:
+    """
+    Удаляет строку из Google Sheets по Telegram message ID.
+    
+    Args:
+        list_name (ListName): Название листа для поиска.
+        telegram_message_id (str): ID сообщения Telegram для поиска и удаления.
+        
+    Returns:
+        bool: True если строка найдена и удалена, False если не найдена.
+    """
+    try:
+        # Определяем столбец с Telegram ID в зависимости от типа листа
+        if list_name == ListName.expenses:
+            column = 'L'
+        elif list_name == ListName.transfers:
+            column = 'M'
+        elif list_name == ListName.incomes:
+            column = 'K'
+        else:
+            LOGGER.error(f"Unsupported list name: {list_name}")
+            return False
+            
+        # Получаем все значения из столбца с Telegram IDs
+        range_name = f"{list_name}!{column}:${column}"
+        result = _SERVICE.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=range_name
+        ).execute()
+        
+        values = result.get('values', [])
+        
+        # Ищем строку с нужным telegram_message_id
+        row_to_delete = None
+        for i, row in enumerate(values):
+            if row and row[0] == telegram_message_id:
+                row_to_delete = i + 1  # +1 так как индексация в Sheets начинается с 1
+                break
+                
+        if row_to_delete is None:
+            LOGGER.warning(f"Row with telegram_message_id {telegram_message_id} not found in {list_name}")
+            return False
+            
+        # Удаляем строку
+        delete_request = {
+            "deleteDimension": {
+                "range": {
+                    "sheetId": _SHEETS_IDS.get(list_name),
+                    "dimension": "ROWS",
+                    "startIndex": row_to_delete - 1,  # -1 так как API использует 0-based индексы
+                    "endIndex": row_to_delete
+                }
+            }
+        }
+        
+        batch_update_request = {
+            "requests": [delete_request]
+        }
+        
+        response = _SERVICE.spreadsheets().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body=batch_update_request
+        ).execute()
+        
+        LOGGER.info(f"Successfully deleted row {row_to_delete} with telegram_message_id {telegram_message_id} from {list_name}")
+        return True
+        
+    except Exception as e:
+        LOGGER.error(f"Error deleting row by telegram_message_id: {e}")
+        return False
 
 
 def insert_and_update_row_batch_update(request_data: RequestData):
