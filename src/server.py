@@ -1,5 +1,6 @@
 import logging
-
+import json
+import uuid
 import os
 from functools import partial
 
@@ -207,32 +208,37 @@ async def clarify_operation_type(operation_type, processing_message, source_inpu
                            user_message=source_inputted_text)
 
 
-def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button: bool = True) -> InlineKeyboardMarkup:
+def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button: bool = True, message_id: str = None) -> InlineKeyboardMarkup:
     """
     Создаёт клавиатуру для Telegram с двумя кнопками: "Подтвердить" и "Отменить".
 
     Args:
         use_confirm_button (bool): Включить кнопку "Подтвердить" (по умолчанию True).
         use_reject_button (bool): Включить кнопку "Отменить" (по умолчанию True).
+        message_id (str): Уникальный идентификатор сообщения для callback_data.
 
     Returns:
         InlineKeyboardMarkup: Объект клавиатуры для Telegram.
     """
     keyboard = []
+    
+    # Используем message_id в callback_data для уникальной идентификации
+    confirm_data = f"confirm_{message_id}" if message_id else "confirm"
+    reject_data = f"reject_{message_id}" if message_id else "reject"
 
     # Добавляем кнопки в зависимости от параметров
     if use_confirm_button and use_reject_button:
         # Если обе кнопки включены, размещаем их в одном ряду
         keyboard.append([
-            InlineKeyboardButton("Подтвердить", callback_data="confirm"),
-            InlineKeyboardButton("Отменить", callback_data="reject")
+            InlineKeyboardButton("Подтвердить", callback_data=confirm_data),
+            InlineKeyboardButton("Отменить", callback_data=reject_data)
         ])
     elif use_confirm_button:
         # Если только кнопка "Подтвердить" включена
-        keyboard.append([InlineKeyboardButton("Подтвердить", callback_data="confirm")])
+        keyboard.append([InlineKeyboardButton("Подтвердить", callback_data=confirm_data)])
     elif use_reject_button:
         # Если только кнопка "Отменить" включена
-        keyboard.append([InlineKeyboardButton("Отменить", callback_data="reject")])
+        keyboard.append([InlineKeyboardButton("Отменить", callback_data=reject_data)])
 
     return InlineKeyboardMarkup(keyboard)
 
@@ -337,17 +343,41 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_reply_markup(reply_markup=None)  # remove buttons
 
     reply_message: Message = update.callback_query.message
-    user_answer = update.callback_query.data
-    operation_type = context.user_data["operation_type"]
-    request_message = context.user_data["request_message"]
-    source_inputted_text = context.user_data["source_inputted_text"]
-    message_text = context.user_data["body_text"]
+    callback_data = update.callback_query.data
+    
+    # Extract action and message_id from callback_data
+    if "_" in callback_data:
+        action, message_id = callback_data.split("_", 1)
+    else:
+        # Fallback for old format
+        action = callback_data
+        message_id = None
+    
+    # Get message-specific data
+    if message_id:
+        message_data_key = f"msg_{message_id}"
+        message_data = context.user_data.get(message_data_key, {})
+        operation_type = message_data.get("operation_type")
+        request_message = message_data.get("request_message")
+        source_inputted_text = message_data.get("source_inputted_text")
+        message_text = message_data.get("body_text")
+    else:
+        # Fallback to old format
+        operation_type = context.user_data.get("operation_type")
+        request_message = context.user_data.get("request_message")
+        source_inputted_text = context.user_data.get("source_inputted_text")
+        message_text = context.user_data.get("body_text")
 
-    if user_answer == "reject":
+    if action == "reject":
         await edit_message(message=reply_message,
                            text=message_text,
                            user_message=source_inputted_text,
                            status="операция отменена 👀")
+        # Clean up message data after rejection
+        if message_id:
+            message_data_key = f"msg_{message_id}"
+            if message_data_key in context.user_data:
+                del context.user_data[message_data_key]
         return
 
     if operation_type in OperationTypes.expenses:
@@ -393,6 +423,12 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                        text=message_text,
                        user_message=source_inputted_text,
                        status="подтверждено 👍")
+    
+    # Clean up message data after processing
+    if message_id:
+        message_data_key = f"msg_{message_id}"
+        if message_data_key in context.user_data:
+            del context.user_data[message_data_key]
 
 
 async def voice_message_handler(
@@ -458,16 +494,23 @@ async def voice_message_handler(
 
             # save operation_type and request_message to use in button_click_handler()
             body_text = format_json_to_telegram_text(request_message)
-
-            context.user_data["operation_type"] = operation_type
-            context.user_data["request_message"] = request_message
-            context.user_data["body_text"] = body_text
-            context.user_data["source_inputted_text"] = source_inputted_text
+            
+            # Generate unique message ID for this specific message
+            message_id = str(processing_message.message_id)
+            
+            # Store message-specific data with unique key
+            message_data_key = f"msg_{message_id}"
+            context.user_data[message_data_key] = {
+                "operation_type": operation_type,
+                "request_message": request_message,
+                "body_text": body_text,
+                "source_inputted_text": source_inputted_text
+            }
 
             if VALIDATION_TEXT in str(request_message):
-                keyboard = get_reply_keyboard_markup(False, True)
+                keyboard = get_reply_keyboard_markup(False, True, message_id)
             else:
-                keyboard = get_reply_keyboard_markup(True, True)
+                keyboard = get_reply_keyboard_markup(True, True, message_id)
 
             # send message with buttons
             await edit_message(message=processing_message,

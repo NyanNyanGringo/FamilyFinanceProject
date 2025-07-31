@@ -45,7 +45,7 @@ RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/healthcheck.sh
 RUN groupadd -r appuser && useradd -r -g appuser appuser
 
 # Create necessary directories and set all permissions
-RUN mkdir -p voice_messages google_credentials && \
+RUN mkdir -p voice_messages && \
     chown -R appuser:appuser /app
 
 # Switch to non-root user
