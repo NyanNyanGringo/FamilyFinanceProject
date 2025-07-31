@@ -1,5 +1,6 @@
 import logging
-
+import json
+import uuid
 import os
 from functools import partial
 
@@ -7,7 +8,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler
 
 from lib.utilities import google_utilities
-from lib.utilities.google_utilities import OperationTypes, Category, Status, RequestData, ListName, TransferType
+from lib.utilities.google_utilities import OperationTypes, Category, Status, RequestData, ListName, TransferType, insert_and_update_row_batch_update, delete_row_by_telegram_id
 from lib.utilities.openai_utilities import request_data, RequestBuilder, ResponseFormat, MessageRequest, \
     audio2text_for_finance
 from lib.utilities.telegram_utilities import download_voice_message
@@ -185,6 +186,63 @@ async def edit_message(message: Message, text: str, user_message: str = None, st
     await message.edit_text(new_text, parse_mode="HTML", reply_markup=reply_markup)
 
 
+async def create_request_data_from_message(operation_type: OperationTypes, request_message: dict, telegram_message_id: str) -> RequestData:
+    """
+    Создаёт объект RequestData из сообщения запроса.
+    
+    Args:
+        operation_type (OperationTypes): Тип операции.
+        request_message (dict): Словарь с данными запроса.
+        telegram_message_id (str): ID сообщения Telegram.
+        
+    Returns:
+        RequestData: Объект данных для Google Sheets.
+    """
+    # Base data common to all operations
+    # Map operation type to list name
+    if operation_type == OperationTypes.expenses:
+        list_name = ListName.expenses
+    elif operation_type == OperationTypes.incomes:
+        list_name = ListName.incomes
+    else:  # transfers or adjustment
+        list_name = ListName.transfers
+    
+    # Handle different field names for transfers
+    if operation_type == OperationTypes.transfers:
+        account_field = request_message.get("write_off_account")
+        amount_field = request_message.get("write_off_amount")
+    else:
+        account_field = request_message.get("account")
+        amount_field = request_message.get("amount")
+    
+    data = {
+        "list_name": list_name,
+        "amount": amount_field,
+        "account": account_field,
+        "status": Status.get_item(request_message.get("status", "совершено")),
+        "comment": request_message.get("comment", ""),
+        "telegram_message_id": telegram_message_id
+    }
+    
+    # Only add date if it exists in request_message
+    if request_message.get("date") is not None:
+        data["date"] = request_message.get("date")
+    
+    # Operation-specific fields
+    if operation_type == OperationTypes.expenses:
+        data["expenses_category"] = request_message.get("expenses_category")
+    elif operation_type == OperationTypes.incomes:
+        data["incomes_category"] = request_message.get("incomes_category")
+    elif operation_type == OperationTypes.transfers:
+        # Default to "Transfer" if transfer_type is not provided
+        transfer_type = request_message.get("transfer_type", "Transfer")
+        data["transfer_type"] = TransferType.get_item(transfer_type)
+        data["replenishment_account"] = request_message.get("replenishment_account")
+        data["replenishment_amount"] = request_message.get("replenishment_amount", data["amount"])
+    
+    return RequestData(**data)
+
+
 async def clarify_operation_type(operation_type, processing_message, source_inputted_text):
     """
     Проверяет и возвращает корректный тип операции или сообщает об ошибке.
@@ -207,32 +265,70 @@ async def clarify_operation_type(operation_type, processing_message, source_inpu
                            user_message=source_inputted_text)
 
 
-def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button: bool = True) -> InlineKeyboardMarkup:
+def get_delete_button_keyboard(message_id: str) -> InlineKeyboardMarkup:
+    """
+    Создаёт клавиатуру с одной кнопкой "Удалить".
+    
+    Args:
+        message_id (str): Уникальный идентификатор сообщения для callback_data.
+        
+    Returns:
+        InlineKeyboardMarkup: Объект клавиатуры для Telegram.
+    """
+    keyboard = [[InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_{message_id}")]]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_delete_confirmation_keyboard(message_id: str) -> InlineKeyboardMarkup:
+    """
+    Создаёт клавиатуру для подтверждения удаления.
+    
+    Args:
+        message_id (str): Уникальный идентификатор сообщения для callback_data.
+        
+    Returns:
+        InlineKeyboardMarkup: Объект клавиатуры для Telegram.
+    """
+    keyboard = [
+        [
+            InlineKeyboardButton("✅ Да", callback_data=f"delete_confirm_{message_id}"),
+            InlineKeyboardButton("❌ Нет", callback_data=f"delete_cancel_{message_id}")
+        ]
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
+def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button: bool = True, message_id: str = None) -> InlineKeyboardMarkup:
     """
     Создаёт клавиатуру для Telegram с двумя кнопками: "Подтвердить" и "Отменить".
 
     Args:
         use_confirm_button (bool): Включить кнопку "Подтвердить" (по умолчанию True).
         use_reject_button (bool): Включить кнопку "Отменить" (по умолчанию True).
+        message_id (str): Уникальный идентификатор сообщения для callback_data.
 
     Returns:
         InlineKeyboardMarkup: Объект клавиатуры для Telegram.
     """
     keyboard = []
+    
+    # Используем message_id в callback_data для уникальной идентификации
+    confirm_data = f"confirm_{message_id}" if message_id else "confirm"
+    reject_data = f"reject_{message_id}" if message_id else "reject"
 
     # Добавляем кнопки в зависимости от параметров
     if use_confirm_button and use_reject_button:
         # Если обе кнопки включены, размещаем их в одном ряду
         keyboard.append([
-            InlineKeyboardButton("Подтвердить", callback_data="confirm"),
-            InlineKeyboardButton("Отменить", callback_data="reject")
+            InlineKeyboardButton("Подтвердить", callback_data=confirm_data),
+            InlineKeyboardButton("Отменить", callback_data=reject_data)
         ])
     elif use_confirm_button:
         # Если только кнопка "Подтвердить" включена
-        keyboard.append([InlineKeyboardButton("Подтвердить", callback_data="confirm")])
+        keyboard.append([InlineKeyboardButton("Подтвердить", callback_data=confirm_data)])
     elif use_reject_button:
         # Если только кнопка "Отменить" включена
-        keyboard.append([InlineKeyboardButton("Отменить", callback_data="reject")])
+        keyboard.append([InlineKeyboardButton("Отменить", callback_data=reject_data)])
 
     return InlineKeyboardMarkup(keyboard)
 
@@ -337,20 +433,113 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     await query.edit_message_reply_markup(reply_markup=None)  # remove buttons
 
     reply_message: Message = update.callback_query.message
-    user_answer = update.callback_query.data
-    operation_type = context.user_data["operation_type"]
-    request_message = context.user_data["request_message"]
-    source_inputted_text = context.user_data["source_inputted_text"]
-    message_text = context.user_data["body_text"]
+    callback_data = update.callback_query.data
+    
+    # Extract action and message_id from callback_data
+    parts = callback_data.split("_")
+    action = parts[0]
+    
+    if len(parts) >= 2:
+        if action == "delete" and len(parts) >= 3:
+            # Handle delete_confirm_ID or delete_cancel_ID
+            sub_action = parts[1]
+            message_id = parts[2]
+            action = f"{action}_{sub_action}"
+        else:
+            message_id = parts[1]
+    else:
+        # Fallback for old format
+        message_id = None
+    
+    # Get message-specific data
+    if message_id:
+        message_data_key = f"msg_{message_id}"
+        message_data = context.user_data.get(message_data_key, {})
+        operation_type = message_data.get("operation_type")
+        request_message = message_data.get("request_message")
+        source_inputted_text = message_data.get("source_inputted_text")
+        message_text = message_data.get("body_text")
+        saved_to_sheets = message_data.get("saved_to_sheets", False)
+        list_name = message_data.get("list_name")
+    else:
+        # Fallback to old format
+        operation_type = context.user_data.get("operation_type")
+        request_message = context.user_data.get("request_message")
+        source_inputted_text = context.user_data.get("source_inputted_text")
+        message_text = context.user_data.get("body_text")
+        saved_to_sheets = False
+        list_name = None
 
-    if user_answer == "reject":
+    if action == "reject":
         await edit_message(message=reply_message,
                            text=message_text,
                            user_message=source_inputted_text,
                            status="операция отменена 👀")
+        # Clean up message data after rejection
+        if message_id:
+            message_data_key = f"msg_{message_id}"
+            if message_data_key in context.user_data:
+                del context.user_data[message_data_key]
         return
+    
+    elif action == "delete":
+        # Don't remove buttons yet - we need confirmation
+        await query.edit_message_reply_markup(reply_markup=get_delete_confirmation_keyboard(message_id))
+        await edit_message(message=reply_message,
+                           text=message_text,
+                           user_message=source_inputted_text,
+                           status="🗑️ Вы уверены что хотите удалить?",
+                           reply_markup=get_delete_confirmation_keyboard(message_id))
+        return  # Don't clean up data yet
+    
+    elif action == "delete_confirm":
+        # Confirmed deletion
+        if saved_to_sheets and list_name and message_id:
+            try:
+                # Delete from Google Sheets
+                deleted = delete_row_by_telegram_id(list_name, message_id)
+                if deleted:
+                    await edit_message(message=reply_message,
+                                       text=message_text,
+                                       user_message=source_inputted_text,
+                                       status="🗑️ Удалено из Google Sheets")
+                else:
+                    await edit_message(message=reply_message,
+                                       text=message_text,
+                                       user_message=source_inputted_text,
+                                       status="❌ Запись не найдена в Google Sheets")
+            except Exception as e:
+                LOGGER.error(f"Error deleting from Google Sheets: {e}")
+                await edit_message(message=reply_message,
+                                   text=message_text,
+                                   user_message=source_inputted_text,
+                                   status=f"❌ Ошибка удаления: {e}")
+        else:
+            await edit_message(message=reply_message,
+                               text=message_text,
+                               user_message=source_inputted_text,
+                               status="❌ Данные для удаления не найдены")
+        # Clean up message data after deletion
+        if message_id:
+            message_data_key = f"msg_{message_id}"
+            if message_data_key in context.user_data:
+                del context.user_data[message_data_key]
+        return
+    
+    elif action == "delete_cancel":
+        # Cancelled deletion - just remove confirmation buttons
+        await edit_message(message=reply_message,
+                           text=message_text,
+                           user_message=source_inputted_text,
+                           status="✅ Сохранено в Google Sheets",
+                           reply_markup=get_delete_button_keyboard(message_id))
+        return  # Don't clean up data, user might delete later
 
-    if operation_type in OperationTypes.expenses:
+    # The code below handles old confirm/reject flow - only runs for confirm action
+    if action != "confirm":
+        return
+        
+    if operation_type == OperationTypes.expenses:
         google_request_data = RequestData(list_name=ListName.expenses,
                                           expenses_category=request_message.get("expenses_category"),
                                           account=request_message.get("account"),
@@ -393,6 +582,12 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                        text=message_text,
                        user_message=source_inputted_text,
                        status="подтверждено 👍")
+    
+    # Clean up message data after processing
+    if message_id:
+        message_data_key = f"msg_{message_id}"
+        if message_data_key in context.user_data:
+            del context.user_data[message_data_key]
 
 
 async def voice_message_handler(
@@ -458,22 +653,52 @@ async def voice_message_handler(
 
             # save operation_type and request_message to use in button_click_handler()
             body_text = format_json_to_telegram_text(request_message)
-
-            context.user_data["operation_type"] = operation_type
-            context.user_data["request_message"] = request_message
-            context.user_data["body_text"] = body_text
-            context.user_data["source_inputted_text"] = source_inputted_text
+            
+            # Generate unique message ID for this specific message
+            message_id = str(processing_message.message_id)
+            
+            # Store message-specific data with unique key
+            message_data_key = f"msg_{message_id}"
+            context.user_data[message_data_key] = {
+                "operation_type": operation_type,
+                "request_message": request_message,
+                "body_text": body_text,
+                "source_inputted_text": source_inputted_text
+            }
 
             if VALIDATION_TEXT in str(request_message):
-                keyboard = get_reply_keyboard_markup(False, True)
+                # Data has validation errors - show old Accept/Decline buttons
+                keyboard = get_reply_keyboard_markup(False, True, message_id)
+                status_text = "ожидание ответа пользователя."
             else:
-                keyboard = get_reply_keyboard_markup(True, True)
+                # Data is valid - auto-save to Google Sheets
+                try:
+                    # Create RequestData and add telegram_message_id
+                    data = await create_request_data_from_message(
+                        operation_type, request_message, message_id
+                    )
+                    
+                    # Auto-save to Google Sheets
+                    insert_and_update_row_batch_update(data)
+                    
+                    # Store that data was saved for potential deletion
+                    context.user_data[message_data_key]["saved_to_sheets"] = True
+                    context.user_data[message_data_key]["list_name"] = data.list_name
+                    
+                    # Show Delete button and success status
+                    keyboard = get_delete_button_keyboard(message_id)
+                    status_text = "✅ Сохранено в Google Sheets"
+                except Exception as e:
+                    LOGGER.error(f"Failed to auto-save to Google Sheets: {e}")
+                    # On error, show old Accept/Decline buttons
+                    keyboard = get_reply_keyboard_markup(True, True, message_id)
+                    status_text = "❌ Ошибка сохранения."
 
             # send message with buttons
             await edit_message(message=processing_message,
                                text=body_text,
                                user_message=source_inputted_text,
-                               status="ожидание ответа пользователя.",
+                               status=status_text,
                                reply_markup=keyboard)
 
 
