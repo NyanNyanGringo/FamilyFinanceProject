@@ -4,8 +4,8 @@ import uuid
 import os
 from functools import partial
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message, BotCommand
+from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler, CommandHandler
 
 from lib.utilities import google_utilities
 from lib.utilities.google_utilities import OperationTypes, Category, Status, RequestData, ListName, TransferType, insert_and_update_row_batch_update, delete_row_by_telegram_id
@@ -590,6 +590,61 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             del context.user_data[message_data_key]
 
 
+async def expenses_status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Обработчик команды /expenses_status.
+    Читает данные из листа /expenses_status в Google Sheets и отправляет форматированное сообщение.
+    """
+    try:
+        # Отправляем начальное сообщение и сохраняем его для редактирования
+        processing_message = await update.message.reply_text("Загружаю данные о расходах...")
+        
+        # Читаем данные из Google Sheets
+        # A2 - currency code
+        currency_range = "/expenses_status!A2"
+        currency_data = google_utilities.get_values(currency_range)
+        currency_code = currency_data[0][0] if currency_data and currency_data[0] else "RUB"
+        
+        # B2:B - expense categories (without header)
+        categories_range = "/expenses_status!B2:B"
+        categories_data = google_utilities.get_values(categories_range, transform_to_single_list=True)
+        
+        # C2:C - amounts per category (without header)
+        amounts_range = "/expenses_status!C2:C"
+        amounts_data = google_utilities.get_values(amounts_range, transform_to_single_list=True)
+        
+        # D2:D - expected amounts per category (without header)
+        expected_range = "/expenses_status!D2:D"
+        expected_data = google_utilities.get_values(expected_range, transform_to_single_list=True)
+        
+        # E2 - total amount
+        total_range = "/expenses_status!E2"
+        total_data = google_utilities.get_values(total_range)
+        total_amount = total_data[0][0] if total_data and total_data[0] else "0"
+        
+        # Формируем сообщение
+        message = "Господин, траты по категориям в этом месяце:\n\n"
+        
+        # Добавляем категории и суммы
+        if categories_data and amounts_data and expected_data:
+            for i in range(min(len(categories_data), len(amounts_data), len(expected_data))):
+                if categories_data[i] and amounts_data[i] and expected_data[i]:  # Пропускаем пустые строки
+                    message += f"{categories_data[i]} - {amounts_data[i]} из {expected_data[i]} {currency_code}\n"
+        
+        # Добавляем итоговую сумму
+        message += f"\nВсего: {total_amount} {currency_code}"
+        
+        # Редактируем начальное сообщение вместо отправки нового
+        await processing_message.edit_text(message)
+        
+    except Exception as e:
+        LOGGER.error(f"Error in expenses_status_handler: {e}")
+        await update.message.reply_text(
+            "Произошла ошибка при получении данных о расходах. "
+            "Пожалуйста, проверьте настройки Google Sheets и попробуйте позже."
+        )
+
+
 async def voice_message_handler(
         update: Update,
         context: ContextTypes.DEFAULT_TYPE,
@@ -702,11 +757,26 @@ async def voice_message_handler(
                                reply_markup=keyboard)
 
 
+async def set_bot_commands(application: Application) -> None:
+    """
+    Регистрирует команды бота для автодополнения в Telegram.
+    """
+    commands = [
+        BotCommand("expenses_status", "Показать расходы за текущий месяц"),
+    ]
+    
+    await application.bot.set_my_commands(commands)
+    LOGGER.info("Bot commands have been set")
+
+
 def run() -> None:
     application = Application.builder().token(os.getenv("TELEGRAM_TOKEN")).build()
 
     # Устанавливаем глобальный обработчик ошибок
     application.add_error_handler(global_error_handler)
+    
+    # Регистрируем команды бота при старте
+    application.post_init = set_bot_commands
 
     # Используем functools.partial для передачи дополнительного аргумента
     handler_with_vosk = partial(
@@ -727,6 +797,9 @@ def run() -> None:
 
     # Обработчик для нажатий на кнопки
     application.add_handler(CallbackQueryHandler(button_click_handler))
+    
+    # Обработчик для команды /expenses_status
+    application.add_handler(CommandHandler("expenses_status", expenses_status_handler))
 
     # run
     application.run_polling(allowed_updates=Update.ALL_TYPES)
