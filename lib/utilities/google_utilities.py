@@ -243,8 +243,8 @@ class ConfigRange(str, _GoogleBaseEnumClass):
     """
     Перечисление диапазонов ячеек для конфигурации Google Sheets.
     """
-    incomes = "*data!AK7:AK199"
-    expenses = "*data!AJ7:AJ199"
+    incomes = "*data!AL7:AL199"
+    expenses = "*data!AK7:AK199"
     accounts = "*data!M7:M199"
     # currencies = "*data!F5:I105"
 
