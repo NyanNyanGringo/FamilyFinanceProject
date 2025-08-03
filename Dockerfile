@@ -1,62 +1,54 @@
-# Dockerfile for FamilyFinanceProject
-# Using Poetry with proper virtual environment setup
+# syntax=docker/dockerfile:1.6
 
-FROM python:3.11-slim
+FROM python:3.11.6-slim
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    build-essential \
-    ffmpeg \
-    curl \
+# Системные зависимости с кеш-mount, чтобы их обновление не инвалидировало слои
+RUN --mount=type=cache,target=/var/cache/apt \
+    --mount=type=cache,target=/var/lib/apt \
+    apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+        ffmpeg \
+        curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Set work directory
 WORKDIR /app
 
-# Set up Poetry environment variables (based on best practices)
-ENV PYTHONUNBUFFERED="1" \
-    PYTHONDONTWRITEBYTECODE="1" \
-    POETRY_HOME="/opt/poetry" \
-    POETRY_VIRTUALENVS_IN_PROJECT="1" \
-    POETRY_NO_INTERACTION="1"
+# Переменные окружения
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    POETRY_HOME=/opt/poetry \
+    POETRY_VIRTUALENVS_IN_PROJECT=1 \
+    POETRY_NO_INTERACTION=1
 
-# Install Poetry in its own virtual environment
+# Poetry в отдельном venv
 RUN python -m venv "$POETRY_HOME" \
-    && "$POETRY_HOME/bin/pip" install poetry \
+    && "$POETRY_HOME/bin/pip" install --no-cache-dir poetry \
     && ln -s /opt/poetry/bin/poetry /usr/bin/poetry
 
-# Copy Poetry files first (for better caching)
+# Файлы зависимостей
 COPY pyproject.toml poetry.lock ./
 
-# Install dependencies and create virtual environment in project
-RUN poetry install --only=main
+# Установка зависимостей без пересборки пакета проекта
+RUN poetry install --only=main --no-root
 
-# Set PATH to include virtual environment
+# Добавляем venv в PATH
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Copy application code
+# Код приложения
 COPY . .
 
-# Copy Docker utilities and set permissions
+# Скрипты и права
 COPY docker/entrypoint.sh docker/healthcheck.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/entrypoint.sh /usr/local/bin/healthcheck.sh
 
-# Create non-root user for security
+# Пользователь без root-прав
 RUN groupadd -r appuser && useradd -r -g appuser appuser
-
-# Create necessary directories and set all permissions
-RUN mkdir -p voice_messages && \
-    chown -R appuser:appuser /app
-
-# Switch to non-root user
+RUN mkdir -p voice_messages && chown -R appuser:appuser /app
 USER appuser
 
-# Expose health check
+# Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD /usr/local/bin/healthcheck.sh
 
-# Set entrypoint
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]
-
-# Default command - now using Python directly from virtual environment via PATH
 CMD ["python", "run_server.py"]
