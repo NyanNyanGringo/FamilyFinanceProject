@@ -8,7 +8,7 @@ from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler, CommandHandler
 
 from lib.utilities import google_utilities
-from lib.utilities.google_utilities import OperationTypes, Category, Status, RequestData, ListName, TransferType, insert_and_update_row_batch_update, delete_row_by_telegram_id
+from lib.utilities.google_utilities import OperationTypes, Category, Status, RequestData, ListName, TransferType, insert_and_update_row_batch_update, delete_row_by_telegram_id, get_memories, add_memory, delete_memory
 from lib.utilities.openai_utilities import request_data, RequestBuilder, ResponseFormat, MessageRequest, \
     audio2text_for_finance
 from lib.utilities.telegram_utilities import download_voice_message
@@ -423,17 +423,65 @@ async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYP
         LOGGER.error(f"Ошибка при отправке сообщения пользователю: {e}")
 
 
-async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    LOGGER.info(f"Button clicked.")
-    LOGGER.info(f"{update=}")
-    LOGGER.info(f"{context=}")
+async def memory_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обработчик кнопок для операций с памятью.
+    Обрабатывает callback_data начинающиеся с "mem_".
+    """
+    query = update.callback_query
+    callback_data = query.data
+    
+    if callback_data == "mem_done":
+        await query.answer()
+        await query.edit_message_text("✅ Готово")
+        return
+        
+    if callback_data.startswith("mem_del_"):
+        try:
+            memory_index = int(callback_data.replace("mem_del_", ""))
+            memories = get_memories()
+            
+            if 0 <= memory_index < len(memories):
+                deleted_memory = memories[memory_index]
+                if delete_memory(memory_index):
+                    # Обновляем список
+                    memories = get_memories()
+                    if memories:
+                        keyboard = []
+                        message_text = "📝 Сохранённые воспоминания:\n\n"
+                        for i, memory in enumerate(memories):
+                            message_text += f"{i + 1}. {memory}\n"
+                            keyboard.append([InlineKeyboardButton(f"❌ Удалить {i + 1}", callback_data=f"mem_del_{i}")])
+                        keyboard.append([InlineKeyboardButton("✅ Готово", callback_data="mem_done")])
+                        reply_markup = InlineKeyboardMarkup(keyboard)
+                        await query.answer(f"✅ Удалено: {deleted_memory}")
+                        await query.edit_message_text(
+                            message_text + "\nВыберите воспоминание для удаления:",
+                            reply_markup=reply_markup
+                        )
+                    else:
+                        await query.answer("Все воспоминания удалены")
+                        await query.edit_message_text("📝 Все воспоминания удалены.")
+                else:
+                    await query.answer("❌ Ошибка при удалении воспоминания", show_alert=True)
+            else:
+                await query.answer("❌ Неверный индекс воспоминания", show_alert=True)
+        except Exception as e:
+            LOGGER.error(f"Error in memory deletion: {e}")
+            await query.answer("❌ Ошибка при удалении", show_alert=True)
 
+
+async def operation_button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Обработчик кнопок для финансовых операций.
+    Обрабатывает callback_data для операций accept, reject, delete.
+    """
     query = update.callback_query
     await query.answer()  # confirm button click
     await query.edit_message_reply_markup(reply_markup=None)  # remove buttons
-
-    reply_message: Message = update.callback_query.message
-    callback_data = update.callback_query.data
+    
+    reply_message: Message = query.message
+    callback_data = query.data
     
     # Extract action and message_id from callback_data
     parts = callback_data.split("_")
@@ -533,12 +581,9 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
                            user_message=source_inputted_text,
                            status="✅ Сохранено в Google Sheets",
                            reply_markup=get_delete_button_keyboard(message_id))
-        return  # Don't clean up data, user might delete later
+        return  # Keep the data
 
-    # The code below handles old confirm/reject flow - only runs for confirm action
-    if action != "confirm":
-        return
-        
+    # Default case - accept operation
     if operation_type == OperationTypes.expenses:
         google_request_data = RequestData(list_name=ListName.expenses,
                                           expenses_category=request_message.get("expenses_category"),
@@ -590,6 +635,23 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
             del context.user_data[message_data_key]
 
 
+async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """
+    Главный обработчик кнопок. Распределяет вызовы между специализированными обработчиками.
+    """
+    LOGGER.info(f"Button clicked.")
+    LOGGER.info(f"{update=}")
+    LOGGER.info(f"{context=}")
+    
+    callback_data = update.callback_query.data
+    
+    # Направляем в соответствующий обработчик
+    if callback_data.startswith("mem_"):
+        await memory_button_handler(update, context)
+    else:
+        await operation_button_handler(update, context)
+
+
 async def expenses_status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """
     Обработчик команды /expenses_status.
@@ -601,24 +663,24 @@ async def expenses_status_handler(update: Update, context: ContextTypes.DEFAULT_
         
         # Читаем данные из Google Sheets
         # A2 - currency code
-        currency_range = "/expenses_status!A2"
+        currency_range = f"{ListName.expenses_status}!A2"
         currency_data = google_utilities.get_values(currency_range)
         currency_code = currency_data[0][0] if currency_data and currency_data[0] else "RUB"
         
         # B2:B - expense categories (without header)
-        categories_range = "/expenses_status!B2:B"
+        categories_range = f"{ListName.expenses_status}!B2:B"
         categories_data = google_utilities.get_values(categories_range, transform_to_single_list=True)
         
         # C2:C - amounts per category (without header)
-        amounts_range = "/expenses_status!C2:C"
+        amounts_range = f"{ListName.expenses_status}!C2:C"
         amounts_data = google_utilities.get_values(amounts_range, transform_to_single_list=True)
         
         # D2:D - expected amounts per category (without header)
-        expected_range = "/expenses_status!D2:D"
+        expected_range = f"{ListName.expenses_status}!D2:D"
         expected_data = google_utilities.get_values(expected_range, transform_to_single_list=True)
         
         # E2 - total amount
-        total_range = "/expenses_status!E2"
+        total_range = f"{ListName.expenses_status}!E2"
         total_data = google_utilities.get_values(total_range)
         total_amount = total_data[0][0] if total_data and total_data[0] else "0"
         
@@ -643,6 +705,68 @@ async def expenses_status_handler(update: Update, context: ContextTypes.DEFAULT_
             "Произошла ошибка при получении данных о расходах. "
             "Пожалуйста, проверьте настройки Google Sheets и попробуйте позже."
         )
+
+
+async def memory_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Обработчик текстовых сообщений, начинающихся с "#".
+    Сохраняет текст после "#" в лист #memory в Google Sheets.
+    """
+    try:
+        text = update.message.text
+        
+        if not text or not text.startswith("#"):
+            return
+        
+        memory_text = text[1:].strip()
+        
+        if not memory_text:
+            await update.message.reply_text("Пожалуйста, добавьте текст после # для сохранения в памяти.")
+            return
+        
+        if add_memory(memory_text):
+            await update.message.reply_text(f"✅ Память сохранена: {memory_text}")
+            LOGGER.info(f"Memory added: {memory_text}")
+        else:
+            await update.message.reply_text("❌ Ошибка при сохранении памяти. Попробуйте позже.")
+            
+    except Exception as e:
+        LOGGER.error(f"Error in memory_text_handler: {e}")
+        await update.message.reply_text("Произошла ошибка при обработке команды памяти.")
+
+
+async def memory_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """
+    Обработчик команды /memory.
+    Показывает сохранённые воспоминания с возможностью их удаления.
+    """
+    try:
+        memories = get_memories()
+        
+        if not memories:
+            await update.message.reply_text("📝 Нет сохранённых воспоминаний.\n\nОтправьте сообщение, начинающееся с #, чтобы добавить воспоминание.")
+            return
+        
+        # Создаём клавиатуру с кнопками для удаления
+        keyboard = []
+        message_text = "📝 Сохранённые воспоминания:\n\n"
+        
+        for i, memory in enumerate(memories):
+            message_text += f"{i + 1}. {memory}\n"
+            keyboard.append([InlineKeyboardButton(f"❌ Удалить {i + 1}", callback_data=f"mem_del_{i}")])
+        
+        keyboard.append([InlineKeyboardButton("✅ Готово", callback_data="mem_done")])
+        
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        await update.message.reply_text(
+            message_text + "\nВыберите воспоминание для удаления:",
+            reply_markup=reply_markup
+        )
+        
+    except Exception as e:
+        LOGGER.error(f"Error in memory_command_handler: {e}")
+        await update.message.reply_text("Произошла ошибка при получении воспоминаний.")
 
 
 async def voice_message_handler(
@@ -763,6 +887,7 @@ async def set_bot_commands(application: Application) -> None:
     """
     commands = [
         BotCommand("expenses_status", "Показать расходы за текущий месяц"),
+        BotCommand("memory", "Управление сохранёнными воспоминаниями"),
     ]
     
     await application.bot.set_my_commands(commands)
@@ -800,6 +925,12 @@ def run() -> None:
     
     # Обработчик для команды /expenses_status
     application.add_handler(CommandHandler("expenses_status", expenses_status_handler))
+    
+    # Обработчик для команды /memory
+    application.add_handler(CommandHandler("memory", memory_command_handler))
+    
+    # Обработчик для текстовых сообщений, начинающихся с #
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, memory_text_handler))
 
     # run
     application.run_polling(allowed_updates=Update.ALL_TYPES)

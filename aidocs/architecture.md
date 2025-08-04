@@ -8,11 +8,23 @@ The FamilyFinanceProject is a monolithic Telegram bot application that processes
 ### 1. Entry Point
 - `run_server.py` initializes the environment and starts the server
 - `server.py` contains all business logic in a single module
+- Bot commands are registered for auto-completion in Telegram
 
 ### 2. Message Processing Flow
 
 ```
-User Voice Message � Telegram Bot � Voice Handler � Audio Processing � OpenAI � Google Sheets
+User Voice Message � Telegram Bot � Voice Handler � Audio Processing � OpenAI � Google Sheets (Autosave)
+```
+
+### 3. Command Processing Flow
+
+```
+User Command � Command Handler � Google Sheets � Formatted Response
+```
+
+#### Text Message Processing (Memory)
+```
+User Text (#prefix) � Telegram Bot � Memory Text Handler � Google Sheets (#memory)
 ```
 
 #### Detailed Steps:
@@ -37,24 +49,38 @@ User Voice Message � Telegram Bot � Voice Handler � Audio Processing � O
    - Validates categories, accounts, and statuses
    - Marks invalid fields with validation text
 
-6. **User Confirmation**
-   - Sends formatted message with inline keyboard
-   - Waits for user to confirm or reject
-
-7. **Google Sheets Update** (`button_click_handler`)
+6. **Automatic Save to Google Sheets**
+   - Voice messages are now autosaved immediately after validation
+   - Telegram message IDs are stored in columns L, M, K for tracking
    - Creates `RequestData` object based on operation type
    - Executes batch update to Google Sheets
+
+7. **User Confirmation/Deletion**
+   - Sends formatted message with Delete button
+   - Delete button shows confirmation prompt
+   - Second click confirms deletion from Google Sheets
+   - Uses telegram_message_id to locate and delete the row
 
 ## Key Components
 
 ### server.py
 - **Main Module**: Contains all business logic
 - **Functions**:
-  - `voice_message_handler`: Main entry point for voice messages
-  - `button_click_handler`: Handles user confirmations
+  - `voice_message_handler`: Main entry point for voice messages (with autosave)
+  - `button_click_handler`: Router for button callbacks
+  - `memory_button_handler`: Handles memory-related button operations
+  - `operation_button_handler`: Handles financial operation buttons
+  - `memory_text_handler`: Processes text messages starting with "#"
+  - `memory_command_handler`: Handles /memory command
+  - `expenses_status_handler`: Handles /expenses_status command
   - `clarify_request_message`: Validates extracted data
   - `format_json_to_telegram_text`: Formats responses
+  - `set_bot_commands`: Registers bot commands for auto-completion
   - Various utility functions
+
+- **Command Handlers**:
+  - `/expenses_status`: Shows monthly expense breakdown by category
+  - `/memory`: Manages saved memory instructions
 
 ### Utilities (lib/utilities/)
 - **openai_utilities.py**: OpenAI API integration
@@ -62,11 +88,16 @@ User Voice Message � Telegram Bot � Voice Handler � Audio Processing � O
   - Audio-to-text conversion
   - Response format definitions
   - Request builders
+  - `_get_memory_context()`: Integrates memories into all API calls
 
 - **google_utilities.py**: Google Sheets integration
   - Authentication
   - Batch updates
   - Enums for categories, operations, etc.
+  - `delete_row_by_telegram_id`: Deletes rows using telegram message ID
+  - Column references: expenses (AK), incomes (AL)
+  - Memory functions: `get_memories()`, `add_memory()`, `delete_memory()`
+  - ListName enum includes all sheet names
 
 - **telegram_utilities.py**: Telegram-specific functions
 - **ffmpeg_utilities.py**: Audio conversion
@@ -130,3 +161,37 @@ User Voice Message � Telegram Bot � Voice Handler � Audio Processing � O
 - Environment variables in .env file
 - Google credentials in google_credentials folder
 - Vosk models in models folder (optional)
+- Docker volumes for voice messages persistence
+
+## Recent Updates
+
+### Voice Message Autosave (July 2025)
+- All valid voice messages are automatically saved to Google Sheets
+- Telegram message IDs tracked in columns L, M, K
+- Two-step delete process with confirmation
+- Replaced Accept/Decline buttons with single Delete button
+
+### Commands System (August 2025)
+- Added `/expenses_status` command for monthly expense tracking
+- Implemented command auto-completion in Telegram
+- Commands read data from dedicated Google Sheets tabs
+
+### Infrastructure Improvements
+- Fixed Docker Poetry installation caching
+- Voice messages directory as Docker volume
+- Improved error handling for permissions
+
+### Memory System (August 2025)
+- Added text message handler for messages starting with "#"
+- Implemented /memory command for managing saved instructions
+- Store memories in "#memory" sheet, cell A1
+- Memories used as priority context for all OpenAI API calls
+- Two-way interaction: save via # prefix, manage via /memory command
+
+### Code Refactoring (August 2025)
+- Separated button_click_handler into three specialized handlers:
+  - button_click_handler: Main router
+  - memory_button_handler: Memory operations
+  - operation_button_handler: Financial operations
+- Moved hardcoded sheet names to ListName enum
+- Improved code organization following Single Responsibility Principle

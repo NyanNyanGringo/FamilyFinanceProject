@@ -3,6 +3,7 @@ Call me My Lord.
 
 # Better Google Sheet understanding:
 - To understand structure in Google Sheet read `/aidocs/about_google_sheet.md`
+- To understand project structure read `/aidocs/how_to_tree_view.md` documentation
 
 
 # How to use mcp
@@ -26,5 +27,9 @@ Call me My Lord.
 6. Minimize side effects and mutable state—pure functions are far easier to test and refactor.
 7. Handle errors carefully: report failures clearly, avoid swallowing exceptions, and never leave the system in an inconsistent state.
 8. Control dependencies: low-level details must not dictate architecture, and modules should interact only through well-defined interfaces.
-9. Keep automated tests covering critical logic; tests act as living documentation and guard against regressions.
-10. Refactor continually: eliminate dead code, simplify constructs, and maintain consistent formatting so the code stays readable and truly “clean.”
+9. Refactor continually: eliminate dead code, simplify constructs, and maintain consistent formatting so the code 
+   stays readable and truly “clean.”
+
+
+# About docs and code
+- Do not use any special or non-standart symbols in code or documentation

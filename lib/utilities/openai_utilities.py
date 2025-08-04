@@ -6,7 +6,7 @@ import json
 from pydantic import BaseModel
 
 from lib.utilities import google_utilities
-from lib.utilities.google_utilities import Status, ConfigRange, OperationTypes, Category
+from lib.utilities.google_utilities import Status, ConfigRange, OperationTypes, Category, get_memories
 
 
 # LOGGING
@@ -19,6 +19,26 @@ LOGGER = get_logger(__name__)
 # public
 
 CLIENT = OpenAI()
+
+
+def _get_memory_context() -> str:
+    """
+    Получает контекст воспоминаний для добавления в системные сообщения.
+    
+    Returns:
+        str: Форматированная строка с воспоминаниями или пустая строка.
+    """
+    try:
+        memories = get_memories()
+        if memories:
+            memory_text = "ПРИОРИТЕТНЫЕ ИНСТРУКЦИИ (воспоминания пользователя):\n"
+            for i, memory in enumerate(memories, 1):
+                memory_text += f"{i}. {memory}\n"
+            memory_text += "\nСледуй этим инструкциям при обработке запроса.\n\n"
+            return memory_text
+    except Exception as e:
+        LOGGER.error(f"Error getting memory context: {e}")
+    return ""
 
 
 def text2text(prompt: str, model: str = "gpt-4o-mini") -> str:
@@ -35,7 +55,7 @@ def text2text(prompt: str, model: str = "gpt-4o-mini") -> str:
     response = CLIENT.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": "Ты должен ответить только в формате JSON, строго по схеме. Не добавляй никакого текста вне JSON. Если не хватает данных — используй значения по умолчанию, указанные в схеме."},
+            {"role": "system", "content": _get_memory_context() + "Ты должен ответить только в формате JSON, строго по схеме. Не добавляй никакого текста вне JSON. Если не хватает данных — используй значения по умолчанию, указанные в схеме."},
             {"role": "user", "content": prompt}
         ],
     )
@@ -502,7 +522,7 @@ def _get_finance_operation_message(user_message) -> list:
             "content": [
                 {
                     "type": "text",
-                    "text": "Ты - связующее звено между пользователем и Google Tables. Твоя задача - точно и "
+                    "text": _get_memory_context() + "Ты - связующее звено между пользователем и Google Tables. Твоя задача - точно и "
                             "уверенно определить:\n"
                             "1) Относится ли сообщение пользователя к следующим темам: доходы, расходы, бюджет,"
                             "финансы. Пользователь мог записать сообщения в шутку. Также сообщение может быть "
@@ -533,7 +553,7 @@ def _get_basic_message(user_message) -> list:
             "content": [
                 {
                     "type": "text",
-                    "text": "Твоя задача точно и уверенно написать json ответ на основе предварительного анализа "
+                    "text": _get_memory_context() + "Твоя задача точно и уверенно написать json ответ на основе предварительного анализа "
                             "преобразованного в текст голосового сообщения от пользователя."
                 }
             ]
