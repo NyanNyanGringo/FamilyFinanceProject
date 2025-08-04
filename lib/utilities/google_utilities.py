@@ -221,6 +221,8 @@ class ListName(str, _GoogleBaseEnumClass):
     expenses = "↙️Расходы"
     transfers = "🔄Переводы"
     incomes = "↗️Доходы"
+    memory = "#memory"
+    expenses_status = "/expenses_status"
 
 
 class Status(str, _GoogleBaseEnumClass):
@@ -555,3 +557,102 @@ def insert_and_update_row_batch_update(request_data: RequestData):
     LOGGER.info(f"{response=}")
 
     return response
+
+
+def get_memories() -> list[str]:
+    """
+    Получает список сохранённых воспоминаний из ячейки A1 листа #memory.
+    
+    Returns:
+        list[str]: Список воспоминаний. Пустой список, если воспоминаний нет.
+    """
+    try:
+        cell_range = f"{ListName.memory}!A1"
+        values = get_values(cell_range)
+        
+        if not values or not values[0] or not values[0][0]:
+            return []
+        
+        memories_text = values[0][0]
+        memories = [m.strip() for m in memories_text.split('\n') if m.strip()]
+        return memories
+    except Exception as e:
+        LOGGER.error(f"Ошибка при получении воспоминаний: {e}")
+        return []
+
+
+def add_memory(memory_text: str) -> bool:
+    """
+    Добавляет новое воспоминание в ячейку A1 листа #memory.
+    
+    Args:
+        memory_text (str): Текст воспоминания для добавления.
+        
+    Returns:
+        bool: True если успешно добавлено, False в случае ошибки.
+    """
+    try:
+        current_memories = get_memories()
+        current_memories.append(memory_text.strip())
+        
+        new_memories_text = '\n'.join(current_memories)
+        
+        body = {
+            "values": [[new_memories_text]]
+        }
+        
+        cell_range = f"{ListName.memory}!A1"
+        request = _SERVICE.spreadsheets().values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=cell_range,
+            valueInputOption="RAW",
+            body=body
+        )
+        response = request.execute()
+        
+        LOGGER.info(f"Воспоминание добавлено: {memory_text}")
+        return True
+    except Exception as e:
+        LOGGER.error(f"Ошибка при добавлении воспоминания: {e}")
+        return False
+
+
+def delete_memory(memory_index: int) -> bool:
+    """
+    Удаляет воспоминание по индексу из ячейки A1 листа #memory.
+    
+    Args:
+        memory_index (int): Индекс воспоминания для удаления (0-based).
+        
+    Returns:
+        bool: True если успешно удалено, False в случае ошибки.
+    """
+    try:
+        current_memories = get_memories()
+        
+        if memory_index < 0 or memory_index >= len(current_memories):
+            LOGGER.error(f"Неверный индекс воспоминания: {memory_index}")
+            return False
+        
+        deleted_memory = current_memories.pop(memory_index)
+        
+        new_memories_text = '\n'.join(current_memories) if current_memories else ""
+        
+        body = {
+            "values": [[new_memories_text]]
+        }
+        
+        cell_range = f"{ListName.memory}!A1"
+        request = _SERVICE.spreadsheets().values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=cell_range,
+            valueInputOption="RAW",
+            body=body
+        )
+        response = request.execute()
+        
+        LOGGER.info(f"Воспоминание удалено: {deleted_memory}")
+        return True
+    except Exception as e:
+        LOGGER.error(f"Ошибка при удалении воспоминания: {e}")
+        return False
