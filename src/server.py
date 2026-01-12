@@ -1,24 +1,34 @@
-import logging
+import asyncio
 import json
-import uuid
+import logging
 import os
+import uuid
 from functools import partial
 
-from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup, Message, BotCommand
-from telegram.ext import Application, ContextTypes, MessageHandler, filters, CallbackQueryHandler, CommandHandler
+from telegram import (BotCommand, InlineKeyboardButton, InlineKeyboardMarkup,
+                      Message, Update)
+from telegram.error import BadRequest, TimedOut
+from telegram.ext import (Application, CallbackQueryHandler, CommandHandler,
+                          ContextTypes, MessageHandler, filters)
 
-from lib.utilities import google_utilities
-from lib.utilities.google_utilities import OperationTypes, Category, Status, RequestData, ListName, TransferType, insert_and_update_row_batch_update, delete_row_by_telegram_id, get_memories, add_memory, delete_memory
-from lib.utilities.openai_utilities import request_data, RequestBuilder, ResponseFormat, MessageRequest, \
-    audio2text_for_finance
-from lib.utilities.telegram_utilities import download_voice_message
+from lib.utilities import google_utilities, telegram_utilities
 from lib.utilities.ffmpeg_utilities import convert_oga_to_wav
+from lib.utilities.google_utilities import (Category, ListName, OperationTypes,
+                                            RequestData, Status, TransferType,
+                                            add_memory, delete_memory,
+                                            delete_row_by_telegram_id,
+                                            get_memories,
+                                            insert_and_update_row_batch_update)
+from lib.utilities.log_utilities import get_logger
+from lib.utilities.openai_utilities import (MessageRequest, RequestBuilder,
+                                            ResponseFormat,
+                                            audio2text_for_finance,
+                                            request_data)
+from lib.utilities.telegram_utilities import download_voice_message
 from lib.utilities.vosk_utilities import audio2text
 
 # LOGGING
 
-
-from lib.utilities.log_utilities import get_logger
 
 LOGGER = get_logger()
 
@@ -35,6 +45,7 @@ class Audio2TextModels:
     """
     Класс для выбора модели преобразования аудио в текст.
     """
+
     whisper = "whisper"
     vosk = "vosk"
 
@@ -60,7 +71,9 @@ def replace_last_string(original_text: str, text_to_add: str):
         return "\n".join(texts[:-1] + [text_to_add])
 
 
-async def get_text_from_audio(update, context, audio2text_model: Audio2TextModels, custom_text: str = None):
+async def get_text_from_audio(
+    update, context, audio2text_model: Audio2TextModels, custom_text: str = None
+):
     """
     Получает текст из аудиосообщения с помощью выбранной модели.
 
@@ -156,8 +169,13 @@ def set_status_to_text(text: str, status: str) -> str:
     return text.strip()
 
 
-async def edit_message(message: Message, text: str, user_message: str = None, status: str = None,
-                       reply_markup: InlineKeyboardMarkup = None):
+async def edit_message(
+    message: Message,
+    text: str,
+    user_message: str = None,
+    status: str = None,
+    reply_markup: InlineKeyboardMarkup = None,
+):
     """
     Редактирует сообщение Telegram, добавляя текст, статус и разметку.
 
@@ -186,15 +204,17 @@ async def edit_message(message: Message, text: str, user_message: str = None, st
     await message.edit_text(new_text, parse_mode="HTML", reply_markup=reply_markup)
 
 
-async def create_request_data_from_message(operation_type: OperationTypes, request_message: dict, telegram_message_id: str) -> RequestData:
+async def create_request_data_from_message(
+    operation_type: OperationTypes, request_message: dict, telegram_message_id: str
+) -> RequestData:
     """
     Создаёт объект RequestData из сообщения запроса.
-    
+
     Args:
         operation_type (OperationTypes): Тип операции.
         request_message (dict): Словарь с данными запроса.
         telegram_message_id (str): ID сообщения Telegram.
-        
+
     Returns:
         RequestData: Объект данных для Google Sheets.
     """
@@ -206,7 +226,7 @@ async def create_request_data_from_message(operation_type: OperationTypes, reque
         list_name = ListName.incomes
     else:  # transfers or adjustment
         list_name = ListName.transfers
-    
+
     # Handle different field names for transfers
     if operation_type == OperationTypes.transfers:
         account_field = request_message.get("write_off_account")
@@ -214,20 +234,20 @@ async def create_request_data_from_message(operation_type: OperationTypes, reque
     else:
         account_field = request_message.get("account")
         amount_field = request_message.get("amount")
-    
+
     data = {
         "list_name": list_name,
         "amount": amount_field,
         "account": account_field,
         "status": Status.get_item(request_message.get("status", "совершено")),
         "comment": request_message.get("comment", ""),
-        "telegram_message_id": telegram_message_id
+        "telegram_message_id": telegram_message_id,
     }
-    
+
     # Only add date if it exists in request_message
     if request_message.get("date") is not None:
         data["date"] = request_message.get("date")
-    
+
     # Operation-specific fields
     if operation_type == OperationTypes.expenses:
         data["expenses_category"] = request_message.get("expenses_category")
@@ -238,12 +258,16 @@ async def create_request_data_from_message(operation_type: OperationTypes, reque
         transfer_type = request_message.get("transfer_type", "Transfer")
         data["transfer_type"] = TransferType.get_item(transfer_type)
         data["replenishment_account"] = request_message.get("replenishment_account")
-        data["replenishment_amount"] = request_message.get("replenishment_amount", data["amount"])
-    
+        data["replenishment_amount"] = request_message.get(
+            "replenishment_amount", data["amount"]
+        )
+
     return RequestData(**data)
 
 
-async def clarify_operation_type(operation_type, processing_message, source_inputted_text):
+async def clarify_operation_type(
+    operation_type, processing_message, source_inputted_text
+):
     """
     Проверяет и возвращает корректный тип операции или сообщает об ошибке.
 
@@ -259,46 +283,54 @@ async def clarify_operation_type(operation_type, processing_message, source_inpu
         operation_type = OperationTypes.get_item(operation_type)
         return operation_type
     except ValueError:
-        await edit_message(message=processing_message,
-                           text=f'Тип операции "{operation_type}", который определил ChatGPT, неверный. '
-                                f'Попробуйте перезаписать голосовое сообщение.',
-                           user_message=source_inputted_text)
+        await edit_message(
+            message=processing_message,
+            text=f'Тип операции "{operation_type}", который определил ChatGPT, неверный. '
+            f"Попробуйте перезаписать голосовое сообщение.",
+            user_message=source_inputted_text,
+        )
 
 
 def get_delete_button_keyboard(message_id: str) -> InlineKeyboardMarkup:
     """
     Создаёт клавиатуру с одной кнопкой "Удалить".
-    
+
     Args:
         message_id (str): Уникальный идентификатор сообщения для callback_data.
-        
+
     Returns:
         InlineKeyboardMarkup: Объект клавиатуры для Telegram.
     """
-    keyboard = [[InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_{message_id}")]]
+    keyboard = [
+        [InlineKeyboardButton("🗑 Удалить", callback_data=f"delete_{message_id}")]
+    ]
     return InlineKeyboardMarkup(keyboard)
 
 
 def get_delete_confirmation_keyboard(message_id: str) -> InlineKeyboardMarkup:
     """
     Создаёт клавиатуру для подтверждения удаления.
-    
+
     Args:
         message_id (str): Уникальный идентификатор сообщения для callback_data.
-        
+
     Returns:
         InlineKeyboardMarkup: Объект клавиатуры для Telegram.
     """
     keyboard = [
         [
             InlineKeyboardButton("✅ Да", callback_data=f"delete_confirm_{message_id}"),
-            InlineKeyboardButton("❌ Нет", callback_data=f"delete_cancel_{message_id}")
+            InlineKeyboardButton("❌ Нет", callback_data=f"delete_cancel_{message_id}"),
         ]
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
-def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button: bool = True, message_id: str = None) -> InlineKeyboardMarkup:
+def get_reply_keyboard_markup(
+    use_confirm_button: bool = True,
+    use_reject_button: bool = True,
+    message_id: str = None,
+) -> InlineKeyboardMarkup:
     """
     Создаёт клавиатуру для Telegram с двумя кнопками: "Подтвердить" и "Отменить".
 
@@ -311,7 +343,7 @@ def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button
         InlineKeyboardMarkup: Объект клавиатуры для Telegram.
     """
     keyboard = []
-    
+
     # Используем message_id в callback_data для уникальной идентификации
     confirm_data = f"confirm_{message_id}" if message_id else "confirm"
     reject_data = f"reject_{message_id}" if message_id else "reject"
@@ -319,13 +351,17 @@ def get_reply_keyboard_markup(use_confirm_button: bool = True, use_reject_button
     # Добавляем кнопки в зависимости от параметров
     if use_confirm_button and use_reject_button:
         # Если обе кнопки включены, размещаем их в одном ряду
-        keyboard.append([
-            InlineKeyboardButton("Подтвердить", callback_data=confirm_data),
-            InlineKeyboardButton("Отменить", callback_data=reject_data)
-        ])
+        keyboard.append(
+            [
+                InlineKeyboardButton("Подтвердить", callback_data=confirm_data),
+                InlineKeyboardButton("Отменить", callback_data=reject_data),
+            ]
+        )
     elif use_confirm_button:
         # Если только кнопка "Подтвердить" включена
-        keyboard.append([InlineKeyboardButton("Подтвердить", callback_data=confirm_data)])
+        keyboard.append(
+            [InlineKeyboardButton("Подтвердить", callback_data=confirm_data)]
+        )
     elif use_reject_button:
         # Если только кнопка "Отменить" включена
         keyboard.append([InlineKeyboardButton("Отменить", callback_data=reject_data)])
@@ -390,11 +426,16 @@ def clarify_request_message(request_message: dict) -> dict:
                 valid_values = validation_dict.get(key)
                 # iterate through list of valid values
                 for supported_value in valid_values:
-                    if isinstance(supported_value, str) and value.lower() == supported_value.lower():
+                    if (
+                        isinstance(supported_value, str)
+                        and value.lower() == supported_value.lower()
+                    ):
                         result[key] = supported_value
                         break
             else:
-                raise ValueError(f"Expected type of {key} is string, but got: {type(value)} {value}")
+                raise ValueError(
+                    f"Expected type of {key} is string, but got: {type(value)} {value}"
+                )
 
         else:  # key doesn't need validation
             result[key] = value
@@ -409,16 +450,26 @@ def clarify_request_message(request_message: dict) -> dict:
 # HANDLES
 
 
-async def global_error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def global_error_handler(
+    update: object, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     LOGGER.error("Exception while handling an update:", exc_info=context.error)
 
     # send message to user about error
     try:
         if isinstance(update, Update):
             # Пытаемся отправить пользователю сообщение об ошибке
-            message = update.callback_query.message or update.message
-            await message.reply_text("Произошла ошибка при обработке вашего запроса. "
-                                     "Пожалуйста, попробуйте позже.")
+            message = None
+            if update.callback_query and update.callback_query.message:
+                message = update.callback_query.message
+            elif update.message:
+                message = update.message
+
+            if message:
+                await message.reply_text(
+                    "Произошла ошибка при обработке вашего запроса. "
+                    "Пожалуйста, попробуйте позже."
+                )
     except Exception as e:
         LOGGER.error(f"Ошибка при отправке сообщения пользователю: {e}")
 
@@ -430,17 +481,17 @@ async def memory_button_handler(update: Update, context: ContextTypes.DEFAULT_TY
     """
     query = update.callback_query
     callback_data = query.data
-    
+
     if callback_data == "mem_done":
         await query.answer()
         await query.edit_message_text("✅ Готово")
         return
-        
+
     if callback_data.startswith("mem_del_"):
         try:
             memory_index = int(callback_data.replace("mem_del_", ""))
             memories = get_memories()
-            
+
             if 0 <= memory_index < len(memories):
                 deleted_memory = memories[memory_index]
                 if delete_memory(memory_index):
@@ -451,19 +502,34 @@ async def memory_button_handler(update: Update, context: ContextTypes.DEFAULT_TY
                         message_text = "📝 Сохранённые воспоминания:\n\n"
                         for i, memory in enumerate(memories):
                             message_text += f"{i + 1}. {memory}\n"
-                            keyboard.append([InlineKeyboardButton(f"❌ Удалить {i + 1}", callback_data=f"mem_del_{i}")])
-                        keyboard.append([InlineKeyboardButton("✅ Готово", callback_data="mem_done")])
+                            keyboard.append(
+                                [
+                                    InlineKeyboardButton(
+                                        f"❌ Удалить {i + 1}",
+                                        callback_data=f"mem_del_{i}",
+                                    )
+                                ]
+                            )
+                        keyboard.append(
+                            [
+                                InlineKeyboardButton(
+                                    "✅ Готово", callback_data="mem_done"
+                                )
+                            ]
+                        )
                         reply_markup = InlineKeyboardMarkup(keyboard)
                         await query.answer(f"✅ Удалено: {deleted_memory}")
                         await query.edit_message_text(
                             message_text + "\nВыберите воспоминание для удаления:",
-                            reply_markup=reply_markup
+                            reply_markup=reply_markup,
                         )
                     else:
                         await query.answer("Все воспоминания удалены")
                         await query.edit_message_text("📝 Все воспоминания удалены.")
                 else:
-                    await query.answer("❌ Ошибка при удалении воспоминания", show_alert=True)
+                    await query.answer(
+                        "❌ Ошибка при удалении воспоминания", show_alert=True
+                    )
             else:
                 await query.answer("❌ Неверный индекс воспоминания", show_alert=True)
         except Exception as e:
@@ -477,16 +543,28 @@ async def operation_button_handler(update: Update, context: ContextTypes.DEFAULT
     Обрабатывает callback_data для операций accept, reject, delete.
     """
     query = update.callback_query
-    await query.answer()  # confirm button click
-    await query.edit_message_reply_markup(reply_markup=None)  # remove buttons
-    
+    try:
+        await query.answer()  # confirm button click
+    except BadRequest as e:
+        # Happens when user clicks an old button while previous updates are still processing
+        if "Query is too old" in str(e) or "query id is invalid" in str(e):
+            LOGGER.warning(f"Stale callback query ignored: {e}")
+            if query.message:
+                await query.message.reply_text(
+                    "⚠️ Кнопка устарела. Нажмите кнопку ещё раз, если действие актуально."
+                )
+            return
+        raise
+    if query.message and query.message.reply_markup:
+        await query.edit_message_reply_markup(reply_markup=None)  # remove buttons
+
     reply_message: Message = query.message
     callback_data = query.data
-    
+
     # Extract action and message_id from callback_data
     parts = callback_data.split("_")
     action = parts[0]
-    
+
     if len(parts) >= 2:
         if action == "delete" and len(parts) >= 3:
             # Handle delete_confirm_ID or delete_cancel_ID
@@ -498,7 +576,7 @@ async def operation_button_handler(update: Update, context: ContextTypes.DEFAULT
     else:
         # Fallback for old format
         message_id = None
-    
+
     # Get message-specific data
     if message_id:
         message_data_key = f"msg_{message_id}"
@@ -519,27 +597,33 @@ async def operation_button_handler(update: Update, context: ContextTypes.DEFAULT
         list_name = None
 
     if action == "reject":
-        await edit_message(message=reply_message,
-                           text=message_text,
-                           user_message=source_inputted_text,
-                           status="операция отменена 👀")
+        await edit_message(
+            message=reply_message,
+            text=message_text,
+            user_message=source_inputted_text,
+            status="операция отменена 👀",
+        )
         # Clean up message data after rejection
         if message_id:
             message_data_key = f"msg_{message_id}"
             if message_data_key in context.user_data:
                 del context.user_data[message_data_key]
         return
-    
+
     elif action == "delete":
         # Don't remove buttons yet - we need confirmation
-        await query.edit_message_reply_markup(reply_markup=get_delete_confirmation_keyboard(message_id))
-        await edit_message(message=reply_message,
-                           text=message_text,
-                           user_message=source_inputted_text,
-                           status="🗑️ Вы уверены что хотите удалить?",
-                           reply_markup=get_delete_confirmation_keyboard(message_id))
+        await query.edit_message_reply_markup(
+            reply_markup=get_delete_confirmation_keyboard(message_id)
+        )
+        await edit_message(
+            message=reply_message,
+            text=message_text,
+            user_message=source_inputted_text,
+            status="🗑️ Вы уверены что хотите удалить?",
+            reply_markup=get_delete_confirmation_keyboard(message_id),
+        )
         return  # Don't clean up data yet
-    
+
     elif action == "delete_confirm":
         # Confirmed deletion
         if saved_to_sheets and list_name and message_id:
@@ -547,75 +631,93 @@ async def operation_button_handler(update: Update, context: ContextTypes.DEFAULT
                 # Delete from Google Sheets
                 deleted = delete_row_by_telegram_id(list_name, message_id)
                 if deleted:
-                    await edit_message(message=reply_message,
-                                       text=message_text,
-                                       user_message=source_inputted_text,
-                                       status="🗑️ Удалено из Google Sheets")
+                    await edit_message(
+                        message=reply_message,
+                        text=message_text,
+                        user_message=source_inputted_text,
+                        status="🗑️ Удалено из Google Sheets",
+                    )
                 else:
-                    await edit_message(message=reply_message,
-                                       text=message_text,
-                                       user_message=source_inputted_text,
-                                       status="❌ Запись не найдена в Google Sheets")
+                    await edit_message(
+                        message=reply_message,
+                        text=message_text,
+                        user_message=source_inputted_text,
+                        status="❌ Запись не найдена в Google Sheets",
+                    )
             except Exception as e:
                 LOGGER.error(f"Error deleting from Google Sheets: {e}")
-                await edit_message(message=reply_message,
-                                   text=message_text,
-                                   user_message=source_inputted_text,
-                                   status=f"❌ Ошибка удаления: {e}")
+                await edit_message(
+                    message=reply_message,
+                    text=message_text,
+                    user_message=source_inputted_text,
+                    status=f"❌ Ошибка удаления: {e}",
+                )
         else:
-            await edit_message(message=reply_message,
-                               text=message_text,
-                               user_message=source_inputted_text,
-                               status="❌ Данные для удаления не найдены")
+            await edit_message(
+                message=reply_message,
+                text=message_text,
+                user_message=source_inputted_text,
+                status="❌ Данные для удаления не найдены",
+            )
         # Clean up message data after deletion
         if message_id:
             message_data_key = f"msg_{message_id}"
             if message_data_key in context.user_data:
                 del context.user_data[message_data_key]
         return
-    
+
     elif action == "delete_cancel":
         # Cancelled deletion - just remove confirmation buttons
-        await edit_message(message=reply_message,
-                           text=message_text,
-                           user_message=source_inputted_text,
-                           status="✅ Сохранено в Google Sheets",
-                           reply_markup=get_delete_button_keyboard(message_id))
+        await edit_message(
+            message=reply_message,
+            text=message_text,
+            user_message=source_inputted_text,
+            status="✅ Сохранено в Google Sheets",
+            reply_markup=get_delete_button_keyboard(message_id),
+        )
         return  # Keep the data
 
     # Default case - accept operation
     if operation_type == OperationTypes.expenses:
-        google_request_data = RequestData(list_name=ListName.expenses,
-                                          expenses_category=request_message.get("expenses_category"),
-                                          account=request_message.get("account"),
-                                          amount=request_message.get("amount"),
-                                          status=request_message.get("status"),
-                                          comment=request_message.get("comment"))
+        google_request_data = RequestData(
+            list_name=ListName.expenses,
+            expenses_category=request_message.get("expenses_category"),
+            account=request_message.get("account"),
+            amount=request_message.get("amount"),
+            status=request_message.get("status"),
+            comment=request_message.get("comment"),
+        )
     elif operation_type == OperationTypes.incomes:
-        google_request_data = RequestData(list_name=ListName.incomes,
-                                          incomes_category=request_message.get("incomes_category"),
-                                          account=request_message.get("account"),
-                                          amount=request_message.get("amount"),
-                                          status=request_message.get("status"),
-                                          comment=request_message.get("comment"))
+        google_request_data = RequestData(
+            list_name=ListName.incomes,
+            incomes_category=request_message.get("incomes_category"),
+            account=request_message.get("account"),
+            amount=request_message.get("amount"),
+            status=request_message.get("status"),
+            comment=request_message.get("comment"),
+        )
     elif operation_type == OperationTypes.transfers:
-        google_request_data = RequestData(list_name=ListName.transfers,
-                                          transfer_type=TransferType.transfer,
-                                          account=request_message.get("write_off_account"),
-                                          replenishment_account=request_message.get("replenishment_account"),
-                                          amount=request_message.get("write_off_amount"),
-                                          replenishment_amount=request_message.get("replenishment_amount"),
-                                          status=request_message.get("status"),
-                                          comment=request_message.get("comment"))
+        google_request_data = RequestData(
+            list_name=ListName.transfers,
+            transfer_type=TransferType.transfer,
+            account=request_message.get("write_off_account"),
+            replenishment_account=request_message.get("replenishment_account"),
+            amount=request_message.get("write_off_amount"),
+            replenishment_amount=request_message.get("replenishment_amount"),
+            status=request_message.get("status"),
+            comment=request_message.get("comment"),
+        )
     elif operation_type == OperationTypes.adjustment:
-        google_request_data = RequestData(list_name=ListName.transfers,
-                                          transfer_type=TransferType.adjustment,
-                                          account=request_message.get("adjustment_account"),
-                                          replenishment_account=request_message.get("adjustment_account"),
-                                          amount=0,
-                                          replenishment_amount=request_message.get("adjustment_amount"),
-                                          status=request_message.get("status"),
-                                          comment=request_message.get("comment"))
+        google_request_data = RequestData(
+            list_name=ListName.transfers,
+            transfer_type=TransferType.adjustment,
+            account=request_message.get("adjustment_account"),
+            replenishment_account=request_message.get("adjustment_account"),
+            amount=0,
+            replenishment_amount=request_message.get("adjustment_amount"),
+            status=request_message.get("status"),
+            comment=request_message.get("comment"),
+        )
     else:
         raise ValueError(f"Unsupported operation type: {operation_type}")
 
@@ -623,11 +725,13 @@ async def operation_button_handler(update: Update, context: ContextTypes.DEFAULT
 
     google_utilities.insert_and_update_row_batch_update(google_request_data)
 
-    await edit_message(message=reply_message,
-                       text=message_text,
-                       user_message=source_inputted_text,
-                       status="подтверждено 👍")
-    
+    await edit_message(
+        message=reply_message,
+        text=message_text,
+        user_message=source_inputted_text,
+        status="подтверждено 👍",
+    )
+
     # Clean up message data after processing
     if message_id:
         message_data_key = f"msg_{message_id}"
@@ -642,9 +746,9 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
     LOGGER.info(f"Button clicked.")
     LOGGER.info(f"{update=}")
     LOGGER.info(f"{context=}")
-    
+
     callback_data = update.callback_query.data
-    
+
     # Направляем в соответствующий обработчик
     if callback_data.startswith("mem_"):
         await memory_button_handler(update, context)
@@ -652,53 +756,69 @@ async def button_click_handler(update: Update, context: ContextTypes.DEFAULT_TYP
         await operation_button_handler(update, context)
 
 
-async def expenses_status_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def expenses_status_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """
     Обработчик команды /expenses_status.
     Читает данные из листа /expenses_status в Google Sheets и отправляет форматированное сообщение.
     """
     try:
         # Отправляем начальное сообщение и сохраняем его для редактирования
-        processing_message = await update.message.reply_text("Загружаю данные о расходах...")
-        
+        processing_message = await update.message.reply_text(
+            "Загружаю данные о расходах..."
+        )
+
         # Читаем данные из Google Sheets
         # A2 - currency code
         currency_range = f"{ListName.expenses_status}!A2"
         currency_data = google_utilities.get_values(currency_range)
-        currency_code = currency_data[0][0] if currency_data and currency_data[0] else "RUB"
-        
+        currency_code = (
+            currency_data[0][0] if currency_data and currency_data[0] else "RUB"
+        )
+
         # B2:B - expense categories (without header)
         categories_range = f"{ListName.expenses_status}!B2:B"
-        categories_data = google_utilities.get_values(categories_range, transform_to_single_list=True)
-        
+        categories_data = google_utilities.get_values(
+            categories_range, transform_to_single_list=True
+        )
+
         # C2:C - amounts per category (without header)
         amounts_range = f"{ListName.expenses_status}!C2:C"
-        amounts_data = google_utilities.get_values(amounts_range, transform_to_single_list=True)
-        
+        amounts_data = google_utilities.get_values(
+            amounts_range, transform_to_single_list=True
+        )
+
         # D2:D - expected amounts per category (without header)
         expected_range = f"{ListName.expenses_status}!D2:D"
-        expected_data = google_utilities.get_values(expected_range, transform_to_single_list=True)
-        
+        expected_data = google_utilities.get_values(
+            expected_range, transform_to_single_list=True
+        )
+
         # E2 - total amount
         total_range = f"{ListName.expenses_status}!E2"
         total_data = google_utilities.get_values(total_range)
         total_amount = total_data[0][0] if total_data and total_data[0] else "0"
-        
+
         # Формируем сообщение
         message = "Господин, траты по категориям в этом месяце:\n\n"
-        
+
         # Добавляем категории и суммы
         if categories_data and amounts_data and expected_data:
-            for i in range(min(len(categories_data), len(amounts_data), len(expected_data))):
-                if categories_data[i] and amounts_data[i] and expected_data[i]:  # Пропускаем пустые строки
+            for i in range(
+                min(len(categories_data), len(amounts_data), len(expected_data))
+            ):
+                if (
+                    categories_data[i] and amounts_data[i] and expected_data[i]
+                ):  # Пропускаем пустые строки
                     message += f"{categories_data[i]} - {amounts_data[i]} из {expected_data[i]} {currency_code}\n"
-        
+
         # Добавляем итоговую сумму
         message += f"\nВсего: {total_amount} {currency_code}"
-        
+
         # Редактируем начальное сообщение вместо отправки нового
         await processing_message.edit_text(message)
-        
+
     except Exception as e:
         LOGGER.error(f"Error in expenses_status_handler: {e}")
         await update.message.reply_text(
@@ -707,87 +827,139 @@ async def expenses_status_handler(update: Update, context: ContextTypes.DEFAULT_
         )
 
 
-async def memory_text_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def memory_text_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """
     Обработчик текстовых сообщений, начинающихся с "#".
     Сохраняет текст после "#" в лист #memory в Google Sheets.
     """
     try:
         text = update.message.text
-        
+
         if not text or not text.startswith("#"):
             return
-        
+
         memory_text = text[1:].strip()
-        
+
         if not memory_text:
-            await update.message.reply_text("Пожалуйста, добавьте текст после # для сохранения в памяти.")
+            await update.message.reply_text(
+                "Пожалуйста, добавьте текст после # для сохранения в памяти."
+            )
             return
-        
+
         if add_memory(memory_text):
             await update.message.reply_text(f"✅ Память сохранена: {memory_text}")
             LOGGER.info(f"Memory added: {memory_text}")
         else:
-            await update.message.reply_text("❌ Ошибка при сохранении памяти. Попробуйте позже.")
-            
+            await update.message.reply_text(
+                "❌ Ошибка при сохранении памяти. Попробуйте позже."
+            )
+
     except Exception as e:
         LOGGER.error(f"Error in memory_text_handler: {e}")
-        await update.message.reply_text("Произошла ошибка при обработке команды памяти.")
+        await update.message.reply_text(
+            "Произошла ошибка при обработке команды памяти."
+        )
 
 
-async def memory_command_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+async def memory_command_handler(
+    update: Update, context: ContextTypes.DEFAULT_TYPE
+) -> None:
     """
     Обработчик команды /memory.
     Показывает сохранённые воспоминания с возможностью их удаления.
     """
     try:
         memories = get_memories()
-        
+
         if not memories:
-            await update.message.reply_text("📝 Нет сохранённых воспоминаний.\n\nОтправьте сообщение, начинающееся с #, чтобы добавить воспоминание.")
+            await update.message.reply_text(
+                "📝 Нет сохранённых воспоминаний.\n\nОтправьте сообщение, начинающееся с #, чтобы добавить воспоминание."
+            )
             return
-        
+
         # Создаём клавиатуру с кнопками для удаления
         keyboard = []
         message_text = "📝 Сохранённые воспоминания:\n\n"
-        
+
         for i, memory in enumerate(memories):
             message_text += f"{i + 1}. {memory}\n"
-            keyboard.append([InlineKeyboardButton(f"❌ Удалить {i + 1}", callback_data=f"mem_del_{i}")])
-        
+            keyboard.append(
+                [
+                    InlineKeyboardButton(
+                        f"❌ Удалить {i + 1}", callback_data=f"mem_del_{i}"
+                    )
+                ]
+            )
+
         keyboard.append([InlineKeyboardButton("✅ Готово", callback_data="mem_done")])
-        
+
         reply_markup = InlineKeyboardMarkup(keyboard)
-        
+
         await update.message.reply_text(
             message_text + "\nВыберите воспоминание для удаления:",
-            reply_markup=reply_markup
+            reply_markup=reply_markup,
         )
-        
+
     except Exception as e:
         LOGGER.error(f"Error in memory_command_handler: {e}")
         await update.message.reply_text("Произошла ошибка при получении воспоминаний.")
 
 
 async def voice_message_handler(
-        update: Update,
-        context: ContextTypes.DEFAULT_TYPE,
-        audio2text_model: Audio2TextModels = Audio2TextModels.whisper,
-        custom_text: str = None) -> None:
+    update: Update,
+    context: ContextTypes.DEFAULT_TYPE,
+    audio2text_model: Audio2TextModels = Audio2TextModels.whisper,
+    custom_text: str = None,
+) -> None:
     # Step I. Convert voice message to text.
-    processing_message = await update.message.reply_text("1/3 Конвертирую аудио в текст. Ожидайте...")
-    context.user_data["reply_message"] = processing_message  # save message for next usage
-    text_from_audio = await get_text_from_audio(update, context, audio2text_model, custom_text)
+    processing_message = None
+    max_retries = 3
+    retry_delay = 2
+
+    for attempt in range(max_retries):
+        try:
+            processing_message = await update.message.reply_text(
+                "1/3 Конвертирую аудио в текст. Ожидайте..."
+            )
+            break
+        except TimedOut:
+            if attempt < max_retries - 1:
+                LOGGER.warning(
+                    f"Timeout sending message, attempt {attempt + 1}/{max_retries}. Retrying in {retry_delay}s..."
+                )
+                await asyncio.sleep(retry_delay)
+            else:
+                LOGGER.error("Failed to send message after all retries")
+                await update.message.reply_text(
+                    "Не удалось отправить сообщение. Попробуйте позже."
+                )
+                return
+
+    if not processing_message:
+        return
+
+    context.user_data["reply_message"] = (
+        processing_message  # save message for next usage
+    )
+    text_from_audio = await get_text_from_audio(
+        update, context, audio2text_model, custom_text
+    )
 
     # Step II. First request to ChatGPT: get json data with operation type and text validity.
     # Text will be divided into parts if user ask for few request in one voice message.
-    await edit_message(message=processing_message,
-                       text="2/3 Определяю тип операции и валидность текста. Ожидайте...",
-                       user_message=text_from_audio)
+    await edit_message(
+        message=processing_message,
+        text="2/3 Определяю тип операции и валидность текста. Ожидайте...",
+        user_message=text_from_audio,
+    )
     finance_operation_request_message = request_data(
         RequestBuilder(
-            message_request=MessageRequest(user_message=text_from_audio).finance_operation_request_message,
-            response_format=ResponseFormat().finance_operation_response
+            message_request=MessageRequest(
+                user_message=text_from_audio
+            ).finance_operation_request_message,
+            response_format=ResponseFormat().finance_operation_response,
         )
     )
     LOGGER.info(f"{finance_operation_request_message=}")
@@ -801,27 +973,39 @@ async def voice_message_handler(
             operation_type: str = finance_operation.get("operation_type")
             source_inputted_text: str = finance_operation.get("source_inputted_text")
             message_to_user: str = finance_operation.get("message_to_user")
-            user_request_is_correct: bool = finance_operation.get("user_request_is_relevant")
+            user_request_is_correct: bool = finance_operation.get(
+                "user_request_is_relevant"
+            )
 
-            operation_type = await clarify_operation_type(operation_type, processing_message, source_inputted_text)
+            operation_type = await clarify_operation_type(
+                operation_type, processing_message, source_inputted_text
+            )
             if not operation_type:
                 continue
 
             if not user_request_is_correct:
-                await edit_message(message=processing_message,
-                                   text=f'Запрос некорректен. Ответ ChatGPT: "{message_to_user}"',
-                                   user_message=source_inputted_text)
+                await edit_message(
+                    message=processing_message,
+                    text=f'Запрос некорректен. Ответ ChatGPT: "{message_to_user}"',
+                    user_message=source_inputted_text,
+                )
                 continue
 
-            await edit_message(message=processing_message,
-                               text=f"3/3 Определяю данные для Google Tables. Ожидайте...",
-                               user_message=source_inputted_text)
+            await edit_message(
+                message=processing_message,
+                text=f"3/3 Определяю данные для Google Tables. Ожидайте...",
+                user_message=source_inputted_text,
+            )
 
             request_message = request_data(
                 RequestBuilder(
                     message_request=MessageRequest(
-                        user_message=source_inputted_text).basic_request_message,
-                    response_format=get_response_format_according_to_operation_type(operation_type))
+                        user_message=source_inputted_text
+                    ).basic_request_message,
+                    response_format=get_response_format_according_to_operation_type(
+                        operation_type
+                    ),
+                )
             )
 
             LOGGER.info(f"(RAW) {request_message=}")
@@ -832,17 +1016,17 @@ async def voice_message_handler(
 
             # save operation_type and request_message to use in button_click_handler()
             body_text = format_json_to_telegram_text(request_message)
-            
+
             # Generate unique message ID for this specific message
             message_id = str(processing_message.message_id)
-            
+
             # Store message-specific data with unique key
             message_data_key = f"msg_{message_id}"
             context.user_data[message_data_key] = {
                 "operation_type": operation_type,
                 "request_message": request_message,
                 "body_text": body_text,
-                "source_inputted_text": source_inputted_text
+                "source_inputted_text": source_inputted_text,
             }
 
             if VALIDATION_TEXT in str(request_message):
@@ -856,14 +1040,14 @@ async def voice_message_handler(
                     data = await create_request_data_from_message(
                         operation_type, request_message, message_id
                     )
-                    
+
                     # Auto-save to Google Sheets
                     insert_and_update_row_batch_update(data)
-                    
+
                     # Store that data was saved for potential deletion
                     context.user_data[message_data_key]["saved_to_sheets"] = True
                     context.user_data[message_data_key]["list_name"] = data.list_name
-                    
+
                     # Show Delete button and success status
                     keyboard = get_delete_button_keyboard(message_id)
                     status_text = "✅ Сохранено в Google Sheets"
@@ -874,11 +1058,13 @@ async def voice_message_handler(
                     status_text = "❌ Ошибка сохранения."
 
             # send message with buttons
-            await edit_message(message=processing_message,
-                               text=body_text,
-                               user_message=source_inputted_text,
-                               status=status_text,
-                               reply_markup=keyboard)
+            await edit_message(
+                message=processing_message,
+                text=body_text,
+                user_message=source_inputted_text,
+                status=status_text,
+                reply_markup=keyboard,
+            )
 
 
 async def set_bot_commands(application: Application) -> None:
@@ -889,7 +1075,7 @@ async def set_bot_commands(application: Application) -> None:
         BotCommand("expenses_status", "Показать расходы за текущий месяц"),
         BotCommand("memory", "Управление сохранёнными воспоминаниями"),
     ]
-    
+
     await application.bot.set_my_commands(commands)
     LOGGER.info("Bot commands have been set")
 
@@ -899,7 +1085,7 @@ def run() -> None:
 
     # Устанавливаем глобальный обработчик ошибок
     application.add_error_handler(global_error_handler)
-    
+
     # Регистрируем команды бота при старте
     application.post_init = set_bot_commands
 
@@ -914,23 +1100,22 @@ def run() -> None:
 
     # Привязываем обработчики для разных моделей
     application.add_handler(
-        MessageHandler(
-            filters.VOICE & ~filters.COMMAND,
-            handler_with_vosk
-        )
+        MessageHandler(filters.VOICE & ~filters.COMMAND, handler_with_vosk)
     )
 
     # Обработчик для нажатий на кнопки
     application.add_handler(CallbackQueryHandler(button_click_handler))
-    
+
     # Обработчик для команды /expenses_status
     application.add_handler(CommandHandler("expenses_status", expenses_status_handler))
-    
+
     # Обработчик для команды /memory
     application.add_handler(CommandHandler("memory", memory_command_handler))
-    
+
     # Обработчик для текстовых сообщений, начинающихся с #
-    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, memory_text_handler))
+    application.add_handler(
+        MessageHandler(filters.TEXT & ~filters.COMMAND, memory_text_handler)
+    )
 
     # run
     application.run_polling(allowed_updates=Update.ALL_TYPES)
