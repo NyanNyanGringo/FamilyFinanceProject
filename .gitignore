@@ -16,3 +16,7 @@ __pycache__/
 *.py[cod]
 *$py.class
 .pytest_cache/
+
+# Other
+test.py
+test2.py
