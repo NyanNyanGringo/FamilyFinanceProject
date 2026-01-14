@@ -1,14 +1,14 @@
-# 1. Session Goals:
-[Awaiting user input for session goals]
+# 1. Цели сессии:
+[Ожидается ввод пользователя с целями сессии]
 
-# 2. TODOs:
-- [x] Fix AttributeError in global_error_handler when handling NoneType.message
-- [x] Add timeout exception handling with retry logic for Telegram API calls
+# 2. TODO:
+- [x] Исправить AttributeError в global_error_handler при обработке NoneType.message
+- [x] Добавить обработку таймаутов с retry-логикой для вызовов Telegram API
 
-# 3. Progress:
+# 3. Прогресс:
 [2025-08-10 11:58]  
-Fixed critical error handling issues in the Telegram bot:
-- Resolved AttributeError in global_error_handler (src/server.py:419-424) by safely checking if update.callback_query exists before accessing its message attribute
-- Added retry logic for Telegram API timeouts in voice_message_handler (src/server.py:778-800) with 3 attempts and 2-second delays
-- Added missing imports: asyncio and TimedOut from telegram.error
-- Bot now gracefully handles network timeouts and won't crash with AttributeErrors in the error handler
+Исправили критические проблемы обработки ошибок в Telegram-боте:
+- Убрали AttributeError в global_error_handler (src/server.py:419-424): безопасно проверяем, что update.callback_query существует, прежде чем обращаться к его message
+- Добавили retry-логику для таймаутов Telegram API в voice_message_handler (src/server.py:778-800): 3 попытки с задержкой 2 секунды
+- Добавили недостающие импорты: asyncio и TimedOut из telegram.error
+- Теперь бот корректно переживает сетевые таймауты и не падает из‑за AttributeError в error handler

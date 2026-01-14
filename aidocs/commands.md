@@ -1,22 +1,22 @@
-# Bot Commands Documentation
+# Документация по командам бота
 
-## Overview
-The FamilyFinanceProject bot supports both voice messages and text commands. Commands provide quick access to specific functionality without needing to send voice messages.
+## Обзор
+Бот FamilyFinanceProject поддерживает как голосовые сообщения, так и текстовые команды. Команды дают быстрый доступ к нужной функциональности без необходимости отправлять голосовые сообщения.
 
-## Available Commands
+## Доступные команды
 
 ### /expenses_status
-**Purpose**: Display current month's expense breakdown by category
+**Назначение**: Показать разбивку расходов за текущий месяц по категориям
 
-**Usage**: Simply type `/expenses_status` in the chat
+**Использование**: Просто отправьте `/expenses_status` в чат
 
-**Functionality**:
-- Reads data from the `/expenses_status` sheet in Google Sheets
-- Shows expenses by category with actual vs expected amounts
-- Displays total monthly expenses
-- Updates automatically as new expenses are added
+**Как работает**:
+- Читает данные из вкладки `/expenses_status` в Google Sheets
+- Показывает расходы по категориям: факт vs план
+- Показывает общую сумму расходов за месяц
+- Автоматически обновляется по мере добавления новых расходов
 
-**Response Format**:
+**Формат ответа**:
 ```
 Господин, траты по категориям в этом месяце:
 
@@ -27,66 +27,66 @@ The FamilyFinanceProject bot supports both voice messages and text commands. Com
 Всего: 26,500 RUB
 ```
 
-**Data Source**:
-- Sheet: `/expenses_status`
-- A2: Currency code
-- B2:B: Category names
-- C2:C: Actual amounts
-- D2:D: Expected amounts
-- E2: Total amount
+**Источник данных**:
+- Лист: `/expenses_status`
+- A2: код валюты
+- B2:B: названия категорий
+- C2:C: фактические суммы
+- D2:D: ожидаемые суммы
+- E2: итоговая сумма
 
 ### /memory
-**Purpose**: Manage saved memory instructions that are used as priority context for all bot operations
+**Назначение**: Управление сохранёнными воспоминаниями (memories), которые используются как приоритетный контекст для всех операций бота
 
-**Usage**: Type `/memory` in the chat
+**Использование**: Отправьте `/memory` в чат
 
-**Functionality**:
-- Shows all saved memories with numbered list
-- Provides inline keyboard buttons to delete individual memories
-- Memories are used as priority instructions for all LLM operations
-- Empty state shows helpful message about adding memories
+**Как работает**:
+- Показывает все сохранённые воспоминания нумерованным списком
+- Даёт inline-кнопки, чтобы удалить отдельные воспоминания
+- Воспоминания используются как приоритетные инструкции для всех LLM-операций
+- Если список пуст — показывает подсказку, как добавить воспоминания
 
-**Adding Memories**:
-- Send any message starting with `#` to save it as a memory
-- Example: `#Always use RUB currency for all operations`
-- The text after `#` will be saved to the memory sheet
+**Как добавлять воспоминания**:
+- Отправьте любое сообщение, начинающееся с `#`, чтобы сохранить его как воспоминание
+- Пример: `#Всегда используй RUB для всех операций`
+- Текст после `#` будет сохранён во вкладку памяти
 
-**Response Format**:
+**Формат ответа**:
 ```
 📝 Сохранённые воспоминания:
 
-1. Always use RUB currency
-2. Round all amounts to nearest 100
-3. Use Продукты category for food expenses
+1. Всегда используй RUB
+2. Округляй суммы до ближайшей сотни
+3. Используй категорию «Продукты» для покупок еды
 
 Выберите воспоминание для удаления:
 [❌ Удалить 1] [❌ Удалить 2] [❌ Удалить 3]
 [✅ Готово]
 ```
 
-**Data Source**:
-- Sheet: `#memory`
-- Cell A1: All memories stored as text, separated by newlines
-- Integration: Memories are automatically included in all OpenAI API calls
+**Источник данных**:
+- Лист: `#memory`
+- Ячейка A1: все воспоминания хранятся текстом, разделённым переводами строк
+- Интеграция: воспоминания автоматически добавляются во все вызовы OpenAI API
 
-## Command Features
+## Возможности команд
 
-### Auto-completion
-All commands support Telegram's built-in auto-completion:
-- Type `/` to see available commands
-- Commands show descriptions in the suggestion list
-- Implemented via `BotCommand` registration on startup
+### Автодополнение
+Все команды поддерживают встроенное автодополнение Telegram:
+- Введите `/`, чтобы увидеть доступные команды
+- Команды показывают описание в списке подсказок
+- Реализовано через регистрацию `BotCommand` при запуске
 
-### Error Handling
-Commands include proper error handling:
-- Connection errors show user-friendly messages
-- Missing data handled gracefully
-- Loading indicators while fetching data
+### Обработка ошибок
+Команды включают базовую обработку ошибок:
+- Ошибки подключения показываются как понятные пользователю сообщения
+- Отсутствующие данные обрабатываются корректно
+- Пока данные загружаются, показывается индикатор/сообщение
 
-## Implementation Details
+## Детали реализации
 
-### Command Registration
-Commands are registered in `set_bot_commands()` function:
+### Регистрация команд
+Команды регистрируются в функции `set_bot_commands()`:
 ```python
 commands = [
     BotCommand("expenses_status", "Показать расходы за текущий месяц"),
@@ -94,55 +94,55 @@ commands = [
 ]
 ```
 
-### Handler Structure
-Each command has a dedicated handler function:
-- Receives `Update` and `Context` objects
-- Sends initial "Loading..." message
-- Fetches data from Google Sheets
-- Formats and sends response
-- Handles errors gracefully
+### Структура обработчиков
+У каждой команды есть отдельная handler-функция:
+- Получает объекты `Update` и `Context`
+- Отправляет начальное сообщение «Загружаю...»
+- Читает данные из Google Sheets
+- Форматирует и отправляет ответ
+- Корректно обрабатывает ошибки
 
-## Future Commands (Planned)
+## Будущие команды (план)
 
 ### /income_status
-- Show monthly income by source
-- Compare to expected income
+- Показать доходы за месяц по источникам
+- Сравнить с планом
 
 ### /balance
-- Show current account balances
-- Display by currency
+- Показать текущие балансы по счетам
+- Отобразить по валютам
 
 ### /transfer_history
-- Recent transfers between accounts
-- Filter by date range
+- Последние переводы между счетами
+- Фильтрация по диапазону дат
 
 ### /help
-- List all available commands
-- Show usage examples
+- Список доступных команд
+- Примеры использования
 
-## Adding New Commands
+## Добавление новых команд
 
-To add a new command:
-1. Create handler function in `server.py`
-2. Register with `CommandHandler` in main
-3. Add to `set_bot_commands()` for auto-completion
-4. Document in this file
+Чтобы добавить новую команду:
+1. Создайте handler-функцию в `server.py`
+2. Зарегистрируйте `CommandHandler` в `run()`
+3. Добавьте команду в `set_bot_commands()` для автодополнения
+4. Обновите документацию в этом файле
 
-## Best Practices
+## Рекомендации
 
-### Command Design
-- Keep commands simple and focused
-- Use descriptive names
-- Provide loading feedback
-- Handle errors gracefully
+### Дизайн команд
+- Делайте команды простыми и сфокусированными
+- Используйте понятные имена
+- Давайте пользователю обратную связь о загрузке
+- Корректно обрабатывайте ошибки
 
-### Data Access
-- Use dedicated Google Sheets tabs
-- Cache data when appropriate
-- Minimize API calls
+### Доступ к данным
+- Используйте отдельные вкладки Google Sheets под команды
+- Кэшируйте данные при необходимости
+- Минимизируйте количество API-вызовов
 
-### User Experience
-- Respond quickly with initial message
-- Edit message with results (avoid spam)
-- Use clear, formatted text
-- Support multiple languages
+### Пользовательский опыт
+- Быстро отвечайте начальным сообщением
+- Редактируйте сообщение с результатом (не спамьте)
+- Используйте понятный и отформатированный текст
+- Поддерживайте несколько языков

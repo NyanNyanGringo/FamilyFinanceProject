@@ -1,255 +1,255 @@
-# 1. Session Goals:
-Set up Docker-ready structure for FamilyFinanceProject deployment on VDS server. Create complete Docker configuration that becomes permanent part of the project, includes automatic audio cleanup, excludes Vosk models, and provides easy build/run commands for both development and production environments.
+# 1. Цели сессии:
+Подготовить Docker-структуру для развёртывания FamilyFinanceProject на VDS. Создать полную Docker-конфигурацию, которая станет постоянной частью проекта, упростит сборку/запуск для dev и prod, исключит модели Vosk и (по исходному запросу) будет включать автосборку/очистку аудио.
 
-# 2. TODOs:
-- [x] Read aidocs folder to understand project context
-- [x] Create Dockerfile with multi-stage Poetry build
-- [x] Create docker-compose.yml for production deployment
-- [x] Create docker-compose.dev.yml for development
-- [x] Create .dockerignore file
-- [x] Create .env.example template
-- [x] Create docker/ folder with utility scripts
-- [x] Create entrypoint.sh with audio cleanup functionality
-- [x] Create healthcheck.sh for container monitoring
-- [x] Create cleanup-audio.sh for periodic audio cleanup
-- [x] Create README-Docker.md with usage instructions
-- [ ] Update .gitignore if needed for Docker files (not needed - Docker files should be committed)
+# 2. TODO:
+- [x] Прочитать aidocs, чтобы понять контекст проекта
+- [x] Создать Dockerfile с multi-stage Poetry build
+- [x] Создать docker-compose.yml для продакшен-развёртывания
+- [x] Создать docker-compose.dev.yml для разработки
+- [x] Создать файл .dockerignore
+- [x] Создать шаблон .env.example
+- [x] Создать папку docker/ с утилитарными скриптами
+- [x] Создать entrypoint.sh с функциональностью очистки аудио
+- [x] Создать healthcheck.sh для мониторинга контейнера
+- [x] Создать cleanup-audio.sh для периодической очистки аудио
+- [x] Создать README-Docker.md с инструкциями
+- [ ] Обновить .gitignore при необходимости (не нужно — Docker-файлы должны быть закоммичены)
 
-# 3. Progress:
+# 3. Прогресс:
 [2025-07-29 21:01]  
-Started new session for Docker VDS deployment setup. User requested complete Docker structure to be part of project (not temporary files), automatic audio cleanup, no Vosk models, and VDS-ready configuration. Need to consider .gitignore exclusions in GitHub repository.
+Начали новую сессию по подготовке Docker-развёртывания на VDS. Пользователь попросил сделать полноценную Docker-структуру частью проекта (не временные файлы), добавить автоматическую очистку аудио, убрать модели Vosk и подготовить конфигурацию под VDS. Также нужно учесть, что исключает .gitignore в репозитории.
 
 [2025-07-29 21:02]  
-Read aidocs folder to understand project context. Key findings:
-- Monolithic Python Telegram bot with all logic in server.py 
-- Uses Poetry for dependency management
-- Audio processing: OGA→WAV conversion, OpenAI Whisper (no Vosk needed)
-- Google Sheets API for data storage, no database
-- Current .gitignore excludes: .env, credentials, voice_messages/, models/, ffmpeg/
-- Tight coupling and limited scalability in current architecture
+Прочитали aidocs, чтобы понять контекст проекта. Ключевые наблюдения:
+- Монолитный Python Telegram-бот: вся логика в server.py
+- Управление зависимостями через Poetry
+- Обработка аудио: конвертация OGA->WAV, распознавание через OpenAI Whisper (Vosk не обязателен)
+- Хранилище данных: Google Sheets API, отдельной БД нет
+- Текущий .gitignore исключает: .env, credentials, voice_messages/, models/, ffmpeg/
+- В текущей архитектуре плотная связность и ограниченная масштабируемость
 
 [2025-07-29 21:05]  
-Successfully created complete Docker setup for VDS deployment:
+Успешно подготовили полный Docker-набор для развёртывания на VDS:
 
-**Core Files Created:**
-- `Dockerfile` - Multi-stage build with Poetry, FFmpeg, non-root user, health checks
-- `docker-compose.yml` - Production setup with volume mounts, logging, resource limits
-- `docker-compose.dev.yml` - Development overrides with source code mounting
-- `.dockerignore` - Build optimization, excludes unnecessary files
-- `.env.example` - Comprehensive environment template with instructions
+**Созданы основные файлы:**
+- `Dockerfile` — multi-stage сборка с Poetry, FFmpeg, запуском от не-root пользователя и health checks
+- `docker-compose.yml` — продакшен-настройка (volume mounts, logging, resource limits)
+- `docker-compose.dev.yml` — оверрайды для разработки (монтирование исходников)
+- `.dockerignore` — оптимизация сборки, исключение лишних файлов
+- `.env.example` — расширенный шаблон окружения с инструкциями
 
-**Utility Scripts in docker/ folder:**
-- `entrypoint.sh` - Container initialization, environment validation, auto audio cleanup
-- `healthcheck.sh` - Container health monitoring (processes, files, resources)
-- `cleanup-audio.sh` - Advanced audio file cleanup with retention policies
+**Утилитарные скрипты в папке docker/:**
+- `entrypoint.sh` — инициализация контейнера, валидация окружения, автоочистка аудио
+- `healthcheck.sh` — проверка здоровья контейнера (процессы, файлы, ресурсы)
+- `cleanup-audio.sh` — продвинутая очистка аудиофайлов с политиками ретеншна
 
-**Key Features Implemented:**
-- ✅ Automatic audio cleanup (configurable retention period)
-- ✅ No Vosk models (OpenAI Whisper only)
-- ✅ VDS-optimized configuration (resource limits, restart policies)
-- ✅ Security hardening (non-root user, no-new-privileges)
-- ✅ Complete deployment documentation in README-Docker.md
-- ✅ Development and production environments
-- ✅ Health monitoring and troubleshooting tools
+**Ключевые фичи:**
+- ✅ Автоматическая очистка аудио (с настраиваемым сроком хранения)
+- ✅ Без моделей Vosk (только OpenAI Whisper)
+- ✅ Конфигурация под VDS (resource limits, restart policies)
+- ✅ Усиление безопасности (не-root user, no-new-privileges)
+- ✅ Полная документация развёртывания в README-Docker.md
+- ✅ Режимы разработки и продакшена
+- ✅ Мониторинг и инструменты для troubleshooting
 
-**Deployment Commands:**
-- Production: `docker-compose up -d`
-- Development: `docker-compose -f docker-compose.yml -f docker-compose.dev.yml up`
-- Health check: `docker exec familyfinance-bot /usr/local/bin/healthcheck.sh`
-- Audio cleanup: `docker exec familyfinance-bot /usr/local/bin/cleanup-audio.sh manual`
+**Команды для развёртывания:**
+- Продакшен: `docker-compose up -d`
+- Разработка: `docker-compose -f docker-compose.yml -f docker-compose.dev.yml up`
+- Проверка здоровья: `docker exec familyfinance-bot /usr/local/bin/healthcheck.sh`
+- Очистка аудио: `docker exec familyfinance-bot /usr/local/bin/cleanup-audio.sh manual`
 
-All Docker files are now permanent part of the project and ready for VDS deployment.
+Все Docker-файлы теперь являются постоянной частью проекта и готовы для деплоя на VDS.
 
 [2025-07-29 21:08]  
-**Docker Build Issue Resolved:**
-Fixed Poetry virtual environment configuration in Dockerfile. Initial approach tried to use multi-stage build with Poetry venv copying, but Poetry was creating virtual environment in cache directory instead of project directory. 
+**Исправили проблему сборки Docker:**
+Починили конфигурацию виртуального окружения Poetry в Dockerfile. Изначально multi-stage подход с копированием venv не сработал: Poetry создавал виртуальное окружение в cache-директории, а не в директории проекта.
 
-**Solution Applied:**
-- Simplified Dockerfile to use single-stage build
-- Configured Poetry with `POETRY_VENV_IN_PROJECT=false` to install dependencies directly to system Python (safe in isolated container)
-- Changed CMD to use `poetry run python run_server.py` to ensure proper dependency resolution
-- Docker build now completes successfully
+**Применённое решение:**
+- Упростили Dockerfile до single-stage сборки
+- Настроили Poetry через `POETRY_VENV_IN_PROJECT=false`, чтобы зависимости ставились в системный Python (нормально для изолированного контейнера)
+- Поменяли CMD на `poetry run python run_server.py`, чтобы гарантировать корректное разрешение зависимостей
+- Docker build теперь проходит успешно
 
-**Build Status:** ✅ SUCCESS - `docker-compose build` completed without errors
+**Статус сборки:** ✅ SUCCESS — `docker-compose build` завершился без ошибок
 
-**Ready for VDS deployment!** The Docker container includes:
-- Python 3.11 with Poetry dependency management
-- FFmpeg for audio processing 
-- All project dependencies installed
-- Security hardening (non-root user)
-- Audio cleanup automation
+**Готово к деплою на VDS!** Контейнер включает:
+- Python 3.11 + Poetry
+- FFmpeg для обработки аудио
+- Все зависимости проекта
+- Усиление безопасности (не-root user)
+- Автоматизацию очистки аудио
 - Health monitoring
-- Production-ready configuration
+- Продакшен-настройки
 
 [2025-07-29 21:10]  
-**Linux Compatibility Issue Fixed:**
-Resolved `stat` command compatibility between macOS and Linux in cleanup-audio.sh script:
-- Changed `stat -f%z` (macOS) to `stat -c%s` (Linux) for file size
-- Changed `stat -f%m` (macOS) to `stat -c%Y` (Linux) for modification time
-- Fixed syntax error in age calculation
+**Исправили проблему совместимости с Linux:**
+Починили совместимость команды `stat` между macOS и Linux в скрипте cleanup-audio.sh:
+- Заменили `stat -f%z` (macOS) на `stat -c%s` (Linux) для размера файла
+- Заменили `stat -f%m` (macOS) на `stat -c%Y` (Linux) для времени изменения
+- Исправили синтаксическую ошибку в вычислении возраста файла
 
-**Final Container Testing:** ✅ SUCCESS
-- Docker build: ✅ Working
-- Cleanup script: ✅ Working (cleaned 354 files, 45MB)
-- Entrypoint validation: ✅ Working (env vars, credentials, directories)
-- Health checks: ✅ Working
-- Audio cleanup on startup: ✅ Working (automatically cleaned old files)
-- All Linux compatibility issues: ✅ Resolved
+**Финальное тестирование контейнера:** ✅ SUCCESS
+- Docker build: ✅ работает
+- Скрипт очистки: ✅ работает (очистил 354 файла, 45MB)
+- Валидация entrypoint: ✅ работает (env vars, креды, директории)
+- Проверки здоровья: ✅ работают
+- Очистка на старте: ✅ работает (автоматически очистил старые файлы)
+- Проблемы Linux-совместимости: ✅ устранены
 
-**Container is production-ready for VDS deployment!**
+**Контейнер готов к продакшену для деплоя на VDS!**
 
 [2025-07-29 21:15]  
-**Audio Cleanup Functionality Removed:**
-Per user request, removed all audio cleanup functionality from Docker setup:
+**Удалили функциональность очистки аудио:**
+По запросу пользователя удалили всю функциональность очистки аудио из Docker-набора:
 
-**Files Modified:**
-- ✅ `docker/entrypoint.sh` - Removed cleanup_audio_startup() and start_periodic_cleanup() functions
-- ✅ `Dockerfile` - Removed cleanup-audio.sh from COPY command
-- ✅ `.env.example` - Removed all AUDIO_CLEANUP_* variables
-- ✅ `README-Docker.md` - Updated documentation to reflect removal
-- ✅ `docker/cleanup-audio.sh` - File deleted
+**Изменённые файлы:**
+- ✅ `docker/entrypoint.sh` — удалены функции cleanup_audio_startup() и start_periodic_cleanup()
+- ✅ `Dockerfile` — удалён cleanup-audio.sh из COPY
+- ✅ `.env.example` — удалены все переменные AUDIO_CLEANUP_*
+- ✅ `README-Docker.md` — документация обновлена
+- ✅ `docker/cleanup-audio.sh` — файл удалён
 
-**Changes Made:**
-- No automatic audio cleanup on startup
-- No periodic audio cleanup background process
-- Voice message files will now accumulate over time
-- Updated configuration display to show "Audio cleanup: Disabled"
-- Added manual cleanup instructions in documentation
+**Что изменилось:**
+- Нет автоматической очистки аудио на старте
+- Нет фоновой периодической очистки
+- Голосовые файлы теперь будут накапливаться со временем
+- Конфигурация обновлена: «Audio cleanup: Disabled»
+- Добавлены инструкции по ручной очистке в документации
 
-**Container Testing:** ✅ SUCCESS
-- Docker build completes without errors
-- Container starts successfully without cleanup functionality
-- All initialization steps work correctly
-- Configuration shows cleanup as disabled
+**Тестирование контейнера:** ✅ SUCCESS
+- Docker build завершается без ошибок
+- Контейнер успешно стартует без функциональности очистки
+- Все шаги инициализации работают корректно
+- Конфигурация показывает, что очистка отключена
 
-**Note:** Voice message files will accumulate in voice_messages/ directory. Manual cleanup may be needed for disk space management.
+**Примечание:** файлы будут накапливаться в директории voice_messages/. Для управления местом на диске может потребоваться ручная очистка.
 
 [2025-07-29 21:17]  
-**Docker Setup Simplified:**
-Per user request, simplified Docker configuration and documentation:
+**Упростили Docker-настройку:**
+По запросу пользователя упростили Docker-конфигурацию и документацию:
 
-**Docker Compose Simplification:**
-- ✅ Removed complex volume configurations, resource limits, logging configs
-- ✅ Simplified to essential: build, restart, env_file, volumes, healthcheck
-- ✅ Direct volume mounting: `./voice_messages:/app/voice_messages`
-- ✅ Updated credential path: `./.google_service_account_credentials.json`
+**Упрощение docker-compose:**
+- ✅ Убрали сложные volume-конфигурации, resource limits и logging configs
+- ✅ Оставили только необходимое: build, restart, env_file, volumes, healthcheck
+- ✅ Прямое монтирование volume: `./voice_messages:/app/voice_messages`
+- ✅ Обновили путь к кредам: `./.google_service_account_credentials.json`
 
-**Documentation Rewrite:**
-- ✅ Completely rewrote README-Docker.md for simplicity
-- ✅ Added detailed VDS setup instructions with step-by-step guide
-- ✅ Included comprehensive "How to get credentials" sections
-- ✅ Added troubleshooting and essential commands
-- ✅ Clear instructions for .env and Google credentials setup on VDS
+**Переписали документацию:**
+- ✅ Полностью переписали README-Docker.md для простоты
+- ✅ Добавили подробные инструкции по настройке VDS шаг за шагом
+- ✅ Включили расширенные секции «как получить credentials»
+- ✅ Добавили troubleshooting и список основных команд
+- ✅ Чёткие инструкции по настройке .env и Google-кредов на VDS
 
-**Key Improvements:**
-- Reduced docker-compose.yml from 65 lines to 18 lines
-- Simplified development override file  
-- Clear VDS deployment workflow with copy-paste commands
-- Detailed credential setup instructions for beginners
-- Essential commands section for daily operations
+**Ключевые улучшения:**
+- Сократили docker-compose.yml с 65 строк до 18
+- Упростили dev override файл
+- Сделали понятный workflow деплоя с копипаст-командами
+- Добавили инструкции для получения credentials для новичков
+- Добавили секцию ежедневных команд
 
-**Testing Results:** ✅ SUCCESS
-- Docker build: ✅ Working with simplified configuration
-- Container startup: ✅ Working with correct credential path
-- Entrypoint validation: ✅ Working with updated file paths
-- Health checks: ✅ Working
+**Результаты тестирования:** ✅ SUCCESS
+- Docker build: ✅ работает с упрощённой конфигурацией
+- Старт контейнера: ✅ работает с корректным путём к кредам
+- Валидация entrypoint: ✅ работает с обновлёнными путями
+- Проверки здоровья: ✅ работают
 
-**Docker setup is now beginner-friendly and VDS-ready!**
+**Docker-набор стал удобным для новичков и готов для VDS!**
 
 [2025-07-29 21:22]  
-**Final Docker Fix - Poetry Virtual Environment Issue Resolved:**
-After multiple attempts with different Poetry configurations, the ModuleNotFoundError was finally resolved by implementing proper Poetry best practices based on web research and example Docker setup.
+**Финальный фикс Docker — полностью решили проблему Poetry venv:**
+После нескольких итераций с разными настройками Poetry ошибка ModuleNotFoundError была окончательно устранена: применили лучшие практики для Docker + Poetry (на основе примеров).
 
-**Root Cause:**
-The issue was with Poetry virtual environment configuration in Docker. Previous attempts using `POETRY_VENV_IN_PROJECT=false` or `poetry run` were unreliable because Poetry wasn't consistently installing dependencies where expected.
+**Причина:**
+Проблема была в конфигурации виртуального окружения Poetry в Docker. Предыдущие варианты (`POETRY_VENV_IN_PROJECT=false` или `poetry run`) были нестабильны — Poetry не всегда ставил зависимости туда, где ожидалось.
 
-**Final Solution Applied:**
-✅ **Proper Poetry Installation**: Installed Poetry in its own virtual environment using `python -m venv "$POETRY_HOME"`
-✅ **Correct Environment Variables**: 
-   - `POETRY_VIRTUALENVS_IN_PROJECT="1"` (ensures .venv created in project)
-   - `PYTHONUNBUFFERED="1"` and `PYTHONDONTWRITEBYTECODE="1"` for optimal container behavior
-✅ **PATH Configuration**: Set `PATH="/app/.venv/bin:$PATH"` to use virtual environment Python directly
-✅ **Direct Python Execution**: Changed CMD to `["python", "run_server.py"]` instead of `poetry run`
+**Финальное решение:**
+✅ **Корректная установка Poetry**: установили Poetry в отдельное venv через `python -m venv "$POETRY_HOME"`
+✅ **Правильные env vars**:
+   - `POETRY_VIRTUALENVS_IN_PROJECT="1"` (гарантирует создание .venv в проекте)
+   - `PYTHONUNBUFFERED="1"` и `PYTHONDONTWRITEBYTECODE="1"` для поведения контейнера
+✅ **PATH**: `PATH="/app/.venv/bin:$PATH"`, чтобы напрямую использовать Python из venv
+✅ **Прямой запуск Python**: CMD изменён на `["python", "run_server.py"]` вместо `poetry run`
 
-**Key Changes Made:**
-1. **Dockerfile.** - Complete rewrite using best practices from Docker Poetry examples
-2. **Poetry Setup**: `RUN python -m venv "$POETRY_HOME" && "$POETRY_HOME/bin/pip" install poetry && ln -s /opt/poetry/bin/poetry /usr/bin/poetry`
-3. **Dependencies**: `RUN poetry install --only=main` with `POETRY_VIRTUALENVS_IN_PROJECT="1"`
-4. **Runtime**: Direct Python execution via PATH instead of poetry run
+**Ключевые изменения:**
+1. `Dockerfile` — полностью переписан по лучшим практикам
+2. Настройка Poetry: `RUN python -m venv "$POETRY_HOME" && "$POETRY_HOME/bin/pip" install poetry && ln -s /opt/poetry/bin/poetry /usr/bin/poetry`
+3. Зависимости: `RUN poetry install --only=main` с `POETRY_VIRTUALENVS_IN_PROJECT="1"`
+4. Runtime: прямой запуск Python через PATH из venv, без `poetry run`
 
-**Final Testing:** ✅ SUCCESS
-- ✅ **Docker Build**: Completed successfully with all dependencies installed including `python-dotenv (1.1.1)`
-- ✅ **Container Startup**: Running with status "Up" and active health checks
-- ✅ **Application Runtime**: Bot successfully processing voice messages and financial operations
-- ✅ **Dependencies**: All modules including dotenv properly accessible from virtual environment
+**Финальные результаты тестирования:** ✅ SUCCESS
+- ✅ **Docker build**: успешно, все зависимости установлены, включая `python-dotenv (1.1.1)`
+- ✅ **Старт контейнера**: статус «Up», health checks активны
+- ✅ **Runtime**: бот успешно обрабатывает голосовые сообщения и финансовые операции
+- ✅ **Зависимости**: все модули (включая dotenv) доступны из виртуального окружения
 
-**Container Status**: 🚀 **PRODUCTION READY**
-- Container name: `familyfinance-bot`
-- Status: Up and running
-- Health checks: Active
-- Bot functionality: Fully operational (processing voice messages, financial operations)
+**Статус контейнера**: 🚀 **PRODUCTION READY**
+- Имя контейнера: `familyfinance-bot`
+- Статус: запущен и работает
+- Проверки здоровья: активны
+- Функциональность: полностью рабочая (голосовые сообщения, финансовые операции)
 
-**VDS Deployment**: The Docker setup is now ready for VDS deployment with all dependencies properly resolved!
+**Деплой на VDS:** Docker-набор готов к VDS-развёртыванию, зависимости устанавливаются корректно.
 
 [2025-07-29 21:30]  
-**Session Continued:**
-Session resumed to continue work on Docker deployment. Current status: Container is production-ready and running successfully. All Docker components including Dockerfile, docker-compose files, entrypoint script, and documentation are implemented and tested.
+**Продолжение сессии:**
+Продолжили работу по Docker-деплою. Текущий статус: контейнер продакшен-готов и успешно запущен. Все компоненты (Dockerfile, docker-compose, entrypoint и документация) реализованы и протестированы.
 
 [2025-07-29 21:35]  
-**VPS Deployment Simplification Research:**
-User requested simpler VPS deployment automation instead of complex bash scripts. Researched modern Docker deployment tools for 2025:
+**Исследование упрощения VPS-деплоя:**
+Пользователь попросил более простую автоматизацию деплоя на VPS вместо сложных bash-скриптов. Посмотрели современные инструменты деплоя Docker на 2025 год:
 
-**Key Findings:**
-- ✅ **Docker Context**: Built-in Docker feature for remote deployment via SSH
-- ✅ **Kamal**: Modern deployment tool with `kamal deploy` command
-- ✅ **CapRover**: Web UI with one-click deployments
-- ✅ **Docker-machine**: Deprecated in 2025, no longer recommended
+**Ключевые варианты:**
+- ✅ **Docker Context**: встроенная возможность Docker для удалённого деплоя по SSH
+- ✅ **Kamal**: современный деплой-тул с командой `kamal deploy`
+- ✅ **CapRover**: Web UI с «one-click deployments»
+- ✅ **docker-machine**: устарел в 2025 и больше не рекомендуется
 
-**Recommended Solution: Docker Context**
-- One-time setup: `docker context create vps --docker "host=ssh://user@vps-ip"`
-- Deploy command: `docker context use vps && docker-compose up -d`
-- No additional tools required, uses existing Docker infrastructure
-- Seamless local/remote development workflow
+**Рекомендуемое решение: Docker Context**
+- Разовая настройка: `docker context create vps --docker "host=ssh://user@vps-ip"`
+- Команда деплоя: `docker context use vps && docker-compose up -d`
+- Не нужны дополнительные инструменты: используется существующая инфраструктура Docker
+- Удобный workflow локально/удалённо
 
 [2025-07-29 21:45]  
-**One-Command Deployment Solution Implemented:**
-Created simple deployment solution using Docker Context approach:
+**Реализовали деплой одной командой:**
+Сделали простой деплой через Docker Context:
 
-**Files Created/Updated:**
-- ✅ `deploy-simple.sh` - 50-line script for one-command deployment
-- ✅ Updated `README-Docker.md` - Added one-command deployment section
+**Созданы/обновлены файлы:**
+- ✅ `deploy-simple.sh` — ~50 строк, деплой одной командой
+- ✅ `README-Docker.md` — добавлен раздел про one-command deployment
 
-**Key Features:**
-- ✅ **Single Command**: `./deploy-simple.sh myvps`
-- ✅ **Auto-setup**: Creates Docker context if it doesn't exist
-- ✅ **Interactive**: Prompts for VPS IP and SSH username on first run
-- ✅ **Context Management**: Automatically switches to VPS context and back
-- ✅ **Error Handling**: Validates connections and deployment status
-- ✅ **No Additional Tools**: Uses built-in Docker features only
+**Ключевые возможности:**
+- ✅ **Одна команда**: `./deploy-simple.sh myvps`
+- ✅ **Автонастройка**: создаёт Docker context, если его ещё нет
+- ✅ **Интерактивность**: при первом запуске спросит IP VPS и SSH-пользователя
+- ✅ **Управление контекстом**: переключается на VPS context и обратно
+- ✅ **Обработка ошибок**: проверяет соединение и статус деплоя
+- ✅ **Без доп. инструментов**: использует только возможности Docker
 
-**Deployment Workflow:**
-1. Run `./deploy-simple.sh myvps` (first time: enter VPS IP/username)
-2. Script creates Docker context via SSH
-3. Deploys using `docker-compose` on remote VPS
-4. Checks deployment status
-5. Switches back to local context
+**Workflow деплоя:**
+1. Запустите `./deploy-simple.sh myvps` (первый раз: введите IP/username)
+2. Скрипт создаст Docker context по SSH
+3. Выполнит деплой через `docker-compose` на VPS
+4. Проверит статус деплоя
+5. Переключит контекст обратно на локальный
 
-**Benefits over complex bash script:**
-- 50 lines vs 200+ lines
-- Uses Docker's built-in remote capabilities
-- No custom SSH handling or file transfers
-- Leverages existing docker-compose.yml
-- Same commands work locally and remotely
+**Преимущества по сравнению со сложными bash-скриптами:**
+- 50 строк вместо 200+
+- Использует встроенный механизм удалённого деплоя Docker
+- Нет кастомной SSH-логики и ручных file transfers
+- Переиспользует существующий docker-compose.yml
+- Те же команды работают локально и удалённо
 
-**Solution Status:** ✅ **COMPLETE** - Simple, modern, one-command VPS deployment ready
+**Статус решения:** ✅ **ЗАВЕРШЕНО** — простой, современный деплой на VPS одной командой готов
 
 [2025-07-29 21:50]  
-**VPS Deployment Issue - Permissions Fix:**
-Container restarting due to entrypoint script failing on chmod permissions for mounted volume.
+**Проблема деплоя на VPS — исправление прав доступа:**
+Контейнер уходил в рестарты из‑за падения entrypoint-скрипта на `chmod` для смонтированного volume.
 
-**Issue:** `chmod: changing permissions of '/app/voice_messages': Operation not permitted`
-**Root Cause:** Entrypoint script using `set -e` causes exit on chmod failure with mounted volumes
-**Fix Applied:** Modified entrypoint script to handle permission errors gracefully:
-- Changed chmod to use `2>/dev/null` to suppress errors
-- Added conditional logic to warn but not fail on permission issues
-- Container needs rebuild to apply updated entrypoint script
+**Ошибка:** `chmod: changing permissions of '/app/voice_messages': Operation not permitted`  
+**Причина:** entrypoint использовал `set -e` и выходил при ошибке `chmod` на смонтированных томах  
+**Фикс:** изменили entrypoint, чтобы он аккуратно обрабатывал ошибки прав:
+- Применили `2>/dev/null`, чтобы подавлять ошибки `chmod`
+- Добавили условную логику: предупреждать, но не падать при ошибках прав
+- Чтобы изменения вступили в силу, контейнер нужно пересобрать

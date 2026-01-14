@@ -1,126 +1,126 @@
-# Infrastructure Documentation
+# Документация по инфраструктуре
 
-## Overview
-The FamilyFinanceProject uses Docker for containerization and deployment, making it easy to run on local machines and VDS/VPS servers.
+## Обзор
+FamilyFinanceProject использует Docker для контейнеризации и развёртывания, что упрощает запуск как локально, так и на VDS/VPS серверах.
 
-## Docker Architecture
+## Архитектура Docker
 
-### Container Setup
-- **Base Image**: Python 3.10-slim
-- **Working Directory**: /app
-- **User**: Non-root user (app) with UID 1000
-- **Health Check**: Custom health check script at 60-second intervals
+### Настройка контейнера
+- **Базовый образ**: Python 3.10-slim
+- **Рабочая директория**: `/app`
+- **Пользователь**: не-root пользователь (app) с UID 1000
+- **Проверка здоровья**: кастомный скрипт проверки здоровья с интервалом 60 секунд
 
-### Docker Compose Configuration
+### Конфигурация Docker Compose
 
-#### Services
+#### Сервисы
 ```yaml
 familyfinance-bot:
-  - Build from local Dockerfile
-  - Automatic restart policy
-  - Environment variables from .env file
-  - Volume mounts for:
-    - Voice messages persistence
-    - Google credentials
-    - Logs directory
+  - Сборка из локального Dockerfile
+  - Автоматическая политика перезапуска
+  - Переменные окружения из файла .env
+  - Монтирование volume'ов для:
+    - Сохранности voice_messages
+    - Google-кредов
+    - Директории логов
 ```
 
 #### Volumes
 1. **Voice Messages**: `./voice_messages:/app/voice_messages`
-   - Stores audio files from users
-   - Persists between container restarts
-   - Automatic cleanup recommended
+   - Хранит аудиофайлы от пользователей
+   - Сохраняется между рестартами контейнера
+   - Рекомендуется периодическая очистка
 
-2. **Google Credentials**: `.google_service_account_credentials.json` mounted as read-only
+2. **Google Credentials**: `.google_service_account_credentials.json` монтируется в режиме read-only
 
-3. **Logs**: `./logs:/app/logs` for application logging
+3. **Logs**: `./logs:/app/logs` для логирования приложения
 
-### Recent Docker Improvements (August 2025)
+### Недавние улучшения Docker (август 2025)
 
-#### Poetry Installation Fix
-- Resolved issue with Poetry being reinstalled on every build
-- Improved Docker layer caching by separating Poetry installation from dependency installation
-- Build process now properly caches Python dependencies
+#### Исправление установки Poetry
+- Исправлена проблема, из-за которой Poetry переустанавливался при каждой сборке
+- Улучшено кэширование Docker-слоёв: установка Poetry отделена от установки зависимостей
+- Процесс сборки теперь корректно кэширует Python-зависимости
 
-#### Permission Handling
-- Added graceful error handling for chmod operations
-- Handles volume mount cases where permissions can't be changed
-- Prevents container startup failures due to permission errors
+#### Обработка прав доступа
+- Добавлена аккуратная обработка ошибок при `chmod`
+- Обрабатываются случаи, когда права нельзя изменить из-за смонтированных volume'ов
+- Предотвращает падение контейнера при старте из-за ошибок прав
 
-## Deployment Methods
+## Способы развёртывания
 
-### Local Development
+### Локальная разработка
 ```bash
 docker-compose up -d
 ```
 
-### Production Deployment (VDS/VPS)
-1. **One-Command Deployment**: `./deploy-simple.sh myvps`
-2. **Manual Deployment**: SSH + docker-compose
+### Продакшен-развёртывание (VDS/VPS)
+1. **Деплой одной командой**: `./deploy-simple.sh myvps`
+2. **Ручной деплой**: SSH + docker-compose
 
-### Health Monitoring
-- Health check endpoint runs every 60 seconds
-- Verifies bot connectivity and basic functionality
-- Container automatically restarts on health check failure
+### Мониторинг здоровья
+- Проверка здоровья запускается каждые 60 секунд
+- Проверяет доступность бота и базовую функциональность
+- Контейнер автоматически перезапускается при провале health check
 
-## Security Considerations
+## Соображения безопасности
 
-### File Permissions
-- Application runs as non-root user
-- Sensitive files (credentials) mounted as read-only
-- Voice messages directory requires write permissions
+### Права файлов
+- Приложение запускается под не-root пользователем
+- Чувствительные файлы (креды) монтируются в режиме read-only
+- Директория `voice_messages` требует прав на запись
 
-### Environment Variables
-- Stored in `.env` file (not committed to git)
-- Contains:
+### Переменные окружения
+- Хранятся в файле `.env` (не коммитится в git)
+- Содержит:
   - OPENAI_API_KEY
   - TELEGRAM_TOKEN
   - GOOGLE_SPREADSHEET_ID
 
-## Maintenance
+## Обслуживание
 
-### Log Management
-- Logs stored in `/app/logs` directory
-- Accessible via: `docker-compose logs -f`
+### Управление логами
+- Логи хранятся в директории `/app/logs`
+- Доступно через: `docker-compose logs -f`
 
-### Voice Messages Cleanup
-- Voice files accumulate over time
-- Manual cleanup recommended:
+### Очистка voice_messages
+- Аудиофайлы со временем накапливаются
+- Рекомендуется ручная очистка:
   ```bash
   docker exec familyfinance-bot find /app/voice_messages -type f -mtime +7 -delete
   ```
 
-### Container Updates
+### Обновление контейнера
 ```bash
-# Pull latest changes
+# Скачать последние изменения
 git pull
 
-# Rebuild container
+# Пересобрать контейнер
 docker-compose build
 
-# Restart with new version
+# Перезапустить с новой версией
 docker-compose up -d
 ```
 
-## Troubleshooting
+## Устранение неполадок
 
-### Common Issues
-1. **Container not starting**: Check logs with `docker-compose logs`
-2. **Permission errors**: Verify volume mount permissions
-3. **High memory usage**: Check voice messages accumulation
-4. **Bot not responding**: Verify API keys in .env file
+### Типичные проблемы
+1. **Контейнер не запускается**: проверьте логи `docker-compose logs`
+2. **Ошибки прав доступа**: проверьте права для смонтированных volume'ов
+3. **Высокое потребление памяти**: проверьте накопление `voice_messages`
+4. **Бот не отвечает**: проверьте ключи API в `.env`
 
-### Debug Commands
+### Команды для отладки
 ```bash
-# Check container status
+# Проверить статус контейнера
 docker-compose ps
 
-# View environment variables
+# Посмотреть переменные окружения
 docker exec familyfinance-bot env | grep -E "(OPENAI|TELEGRAM|GOOGLE)"
 
-# Test health check
+# Запустить health check
 docker exec familyfinance-bot /usr/local/bin/healthcheck.sh
 
-# Interactive shell
+# Интерактивная оболочка
 docker exec -it familyfinance-bot /bin/bash
 ```

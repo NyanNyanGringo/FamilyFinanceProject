@@ -2,64 +2,64 @@
 
 
 ###### Python 3.10
-###### Requires: OpenAI API-key, Google Tables OAuth 2.0 Client ID and Telegram Bot Token
+###### Требуется: OpenAI API key, OAuth 2.0 Client ID для Google Sheets и токен Telegram-бота
 
 
-### Description:
-FamilyFinanceProject is a Telegram bot that manages custom financial Google Sheet.
+### Описание:
+FamilyFinanceProject — это Telegram-бот, который управляет пользовательской финансовой таблицей в Google Sheets.
 
-Core features:
+Основные возможности:
 
-* Create, edit and delete all types of financial operations (incomes, expenses, transfers, adjustments)
-* Use natural language to search, analyze and summarise all the information from Google Sheet like: balance, certain category expenses, account amounts, debts etc.
-* Notifications about: subscriptions, payment periods etc.
-* Weekly, monthly deep breakdowns
-* Weekly Google Sheet backup
+* Создавать, редактировать и удалять все типы финансовых операций (доходы, расходы, переводы, корректировки)
+* Использовать естественный язык, чтобы искать, анализировать и суммировать информацию из Google Sheets: баланс, расходы по конкретной категории, суммы по счетам, долги и т. д.
+* Уведомления о подписках, периодах оплаты и т. п.
+* Еженедельные и ежемесячные подробные разборы
+* Еженедельный бэкап Google Sheets
 
-Main idea:
+Основная идея:
 
-User use Google Sheets as financial database and dashboard platform. All the operations take place inside Telegram via voice and text messages. 
+Пользователь использует Google Sheets как финансовую базу данных и платформу для дашборда. Все операции происходят внутри Telegram через голосовые и текстовые сообщения.
 
 
-### Installation:
+### Установка:
 
-1. Clone the repository:
+1. Клонируйте репозиторий:
 ```
 git clone https://github.com/NyanNyanGringo/FamilyFinanceProject.git
 ```
 
-2. Install dependencies:
+2. Установите зависимости:
 ```
 poetry install
 ```
 
-3. Install ffmpeg:
+3. Установите ffmpeg:
 ```
-# windows
+# Windows
 winget install ffmpeg
 
-# macos
+# macOS
 brew install ffmpeg
 
-# linux
+# Linux
 sudo apt-get install ffmpeg
 ```
 
-4. Rename the `.env.example` file to `.env` and specify the required values in it:
+4. Переименуйте файл `.env.example` в `.env` и укажите в нём необходимые значения:
 ```
 cp .env.example .env
 ```
 
-5. Place `credentials.json` file from your Google Cloud Project to google_credentials folder.
-After running app you have to authorize in Google and `token.json` file will be automatically
-created in the same directory.
+5. Поместите файл `credentials.json` из вашего Google Cloud Project в папку `google_credentials`.
+После запуска приложения нужно будет авторизоваться в Google — файл `token.json` будет автоматически
+создан в той же директории.
 
-6. (optional) Place the necessary vosk models in the models folder
-(if you don't plan to use vosk and prefer whisper, skip this step):
+6. (опционально) Поместите необходимые модели Vosk в папку `models`
+(если вы не планируете использовать Vosk и предпочитаете Whisper — пропустите этот шаг):
 ```
-Download models: https://github.com/alphacep/vosk-space/blob/master/models.md
+Скачать модели: https://github.com/alphacep/vosk-space/blob/master/models.md
 
-Example structure:
+Пример структуры:
 /models
 - /vosk-model-small-ru-0.22
 ```

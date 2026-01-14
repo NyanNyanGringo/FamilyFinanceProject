@@ -1,36 +1,36 @@
-## Detailed Product Description
+## Подробное описание продукта
 
-**What is this project about?**
-It all started when I created a Google Sheet to track our family expenses. The idea turned out to be so convenient that my whole family appreciated it. Over time, the spreadsheet evolved — it began to include income, expenses, transfers, account adjustments, balances, account management, and other powerful features enabled by Google Sheets.
+**О чём этот проект?**
+Всё началось с того, что я создал(а) таблицу в Google Sheets, чтобы отслеживать наши семейные расходы. Идея оказалась настолько удобной, что её оценила вся семья. Со временем таблица развивалась — в ней появились доходы, расходы, переводы, корректировки счетов, балансы, управление счетами и другие мощные возможности, которые даёт Google Sheets.
 
-Then came the challenge of entering data. We decided to use Telegram: we would simply send voice messages with the relevant details. About once every week or two, I would manually listen to each message, transcribe the data into the spreadsheet, and mark each processed message with a like.
+Затем возникла проблема ввода данных. Мы решили использовать Telegram: просто отправлять голосовые сообщения с нужными деталями. Примерно раз в неделю или две мне приходилось вручную переслушивать каждое сообщение, переносить данные в таблицу и отмечать обработанные сообщения лайком.
 
-This project was created to eliminate that manual step.
-
-
-## Users
-
-**Who will use this product?**
-This product is strictly for personal use. It is not — and will not in the foreseeable future be — aimed at a broader audience.
+Этот проект создан, чтобы убрать этот ручной этап.
 
 
-## User Stories
+## Пользователи
 
-**How will users interact with this product?**
-A user simply sends a voice message to a Telegram chat. The bot interprets the context, pulls necessary metadata from Google Sheets, determines the type of operation — income, expense, transfer, or adjustment — and then automatically adds a corresponding row to the sheet.
-
-This saves me (and potentially others) a significant amount of time.
+**Кто будет пользоваться продуктом?**
+Этот продукт строго для личного использования. Он не предназначен — и в обозримом будущем не будет предназначен — для широкой аудитории.
 
 
-## Problems Product Solve
+## Пользовательские сценарии
 
-**Which problems does this product solve?**
-The project is designed to save time on recording expenses, income, and transfers — making the process fast and user-friendly. The idea is that the user only needs to sit down once a month to review and adjust account balances.
+**Как пользователи будут взаимодействовать с продуктом?**
+Пользователь просто отправляет голосовое сообщение в чат Telegram. Бот интерпретирует контекст, подтягивает нужные метаданные из Google Sheets, определяет тип операции — доход, расход, перевод или корректировка — и автоматически добавляет соответствующую строку в таблицу.
 
-As a result, they always have up-to-date, real-time information about the state of all their accounts.
+Это экономит мне (и потенциально другим) заметное количество времени.
 
 
-## Non-Goals
+## Проблемы, которые решает продукт
 
-**What should the product not solve?**
-At this stage, the product is not intended for mass adoption. It is not a global solution — it is a tailored tool for a single family. Of course, we aim for clean and reliable code, but universality is not a priority. This is, first and foremost, a personal solution for the Parfentiev family.
+**Какие проблемы решает продукт?**
+Проект создан, чтобы экономить время на фиксации расходов, доходов и переводов — делая процесс быстрым и удобным. Идея в том, что пользователю достаточно раз в месяц садиться и сверять/корректировать балансы по счетам.
+
+В результате всегда есть актуальная, «почти реальная» информация о состоянии всех счетов.
+
+
+## Нецели
+
+**Что продукт не должен решать?**
+На данном этапе продукт не рассчитан на массовое использование. Это не универсальное решение — это инструмент, заточенный под одну семью. Разумеется, мы стремимся к чистому и надёжному коду, но универсальность не является приоритетом. Это, прежде всего, личное решение для семьи Парфентьевых.

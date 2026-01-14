@@ -1,35 +1,34 @@
-# My name is...
-Call me My Lord.
+# Меня зовут...
+Называйте меня My Lord.
 
-# Better Google Sheet understanding:
-- To understand structure in Google Sheet read `/aidocs/about_google_sheet.md`
-- To understand project structure read `/aidocs/how_to_tree_view.md` documentation
-
-
-# How to use mcp
-- Always use context7 to find actual information about libraries you work with
-- Always use sequentials thinking
+# Чтобы лучше разобраться в Google Sheets:
+- Чтобы понять структуру таблицы, прочитайте `/aidocs/about_google_sheet.md`
+- Чтобы понять структуру проекта, прочитайте документацию `/aidocs/how_to_tree_view.md`
 
 
-# How to use agents
-1. To make the plan for senior-python call lead-qa agents
-2. According to plan, senior-python implement changes
-3. Ask lead-qa to logic-review and code-review
-4. Repeat steps 1 to 3 until result will be succeeded
+# Как использовать mcp
+- Всегда используйте context7, чтобы находить актуальную информацию о библиотеках, с которыми работаете
+- Всегда используйте sequential thinking
 
 
-# Code rools you and agents should follow:
-1. Use clear, concise, context-rich names so the reader immediately understands the purpose of every variable, function, or class.
-2. Break programs into very small functions, each doing only one thing—and doing it well.
-3. Follow the Single Responsibility Principle: every module, class, or method should have just one reason to change.
-4. Remove duplication, because repeated code breeds errors and burdens maintenance.
-5. Write code that conveys intent; if a comment is needed merely to explain “what’s happening,” rewrite the code so it speaks for itself.
-6. Minimize side effects and mutable state—pure functions are far easier to test and refactor.
-7. Handle errors carefully: report failures clearly, avoid swallowing exceptions, and never leave the system in an inconsistent state.
-8. Control dependencies: low-level details must not dictate architecture, and modules should interact only through well-defined interfaces.
-9. Refactor continually: eliminate dead code, simplify constructs, and maintain consistent formatting so the code 
-   stays readable and truly “clean.”
+# Как использовать агентов
+1. Чтобы составить план для senior-python, вызовите агента lead-qa
+2. По плану senior-python реализует изменения
+3. Попросите lead-qa сделать logic-review и code-review
+4. Повторяйте шаги 1–3, пока результат не будет достигнут
 
 
-# About docs and code
-- Do not use any special or non-standart symbols in code or documentation
+# Правила кода, которым должны следовать вы и агенты:
+1. Используйте понятные, лаконичные и контекстные имена, чтобы читатель сразу понимал назначение каждой переменной, функции или класса.
+2. Разбивайте программы на очень маленькие функции: каждая должна делать только одну вещь — и делать её хорошо.
+3. Следуйте принципу единственной ответственности (SRP): у каждого модуля, класса или метода должна быть только одна причина для изменений.
+4. Убирайте дублирование: повторяющийся код порождает ошибки и усложняет поддержку.
+5. Пишите код, который выражает намерение. Если комментарий нужен лишь чтобы объяснить «что происходит», перепишите код так, чтобы он говорил сам за себя.
+6. Минимизируйте побочные эффекты и изменяемое состояние — чистые функции намного проще тестировать и рефакторить.
+7. Аккуратно обрабатывайте ошибки: ясно сообщайте о сбоях, не «проглатывайте» исключения и никогда не оставляйте систему в неконсистентном состоянии.
+8. Контролируйте зависимости: низкоуровневые детали не должны диктовать архитектуру, а модули должны взаимодействовать только через чётко определённые интерфейсы.
+9. Рефакторьте постоянно: удаляйте мёртвый код, упрощайте конструкции и поддерживайте единообразное форматирование, чтобы код оставался читаемым и действительно «чистым».
+
+
+# О документации и коде
+- Не используйте специальные или нестандартные символы в коде и документации

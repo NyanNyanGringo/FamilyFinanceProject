@@ -1,18 +1,18 @@
-# 1. Session Goals:
-Change the logic of user experience for the Telegram bot:
-1. When user sends a voice message and bot replies successfully, immediately send data to Google Sheets (no confirmation required)
-2. Replace accept/decline buttons with a single "Delete" button that requires two-step confirmation
-3. Fix the issue where multiple concurrent messages cause button conflicts (only last message buttons work)
+# 1. Цели сессии:
+Изменить пользовательский сценарий (UX) Telegram-бота:
+1. Когда пользователь отправляет голосовое сообщение и бот успешно отвечает, сразу отправлять данные в Google Sheets (без подтверждения)
+2. Заменить кнопки accept/decline на одну кнопку «Delete» с подтверждением в два шага
+3. Исправить проблему, когда несколько параллельных сообщений приводят к конфликтам кнопок (кнопки работают только у последнего сообщения)
 
-# 2. TODOs:
-- [x] Analyze current message handling and button implementation
-- [x] Understand Google Sheets integration flow
-- [x] Identify the concurrent message button conflict issue
-- [x] Fix concurrent message handling to properly track button states per message
+# 2. TODO:
+- [x] Проанализировать текущую обработку сообщений и реализацию кнопок
+- [x] Разобраться с потоком интеграции с Google Sheets
+- [x] Выявить проблему конфликта кнопок при параллельных сообщениях
+- [x] Исправить параллельную обработку так, чтобы состояние кнопок трекалось отдельно для каждого сообщения
 
-# 3. Progress:
+# 3. Прогресс:
 [2025-07-30 12:00]
-Session started. Goals defined: implement immediate Google Sheets saving, add two-step delete button, fix concurrent message handling issues.
+Сессия началась. Цели: немедленное сохранение в Google Sheets, кнопка удаления с подтверждением в два шага, исправление проблем при параллельной обработке сообщений.
 
 [2025-07-30 12:15]
-Implemented unique message ID tracking system to fix concurrent message handling. Modified button creation to include message_id in callback_data, updated button_click_handler to extract message_id and retrieve correct data, added cleanup mechanism to prevent memory growth. The fix stores message-specific data with unique keys like "msg_{message_id}" instead of overwriting shared context.user_data.
+Реализовали систему трекинга по уникальному message_id, чтобы исправить конфликты кнопок при параллельных сообщениях. Изменили создание кнопок так, чтобы message_id попадал в callback_data; обновили button_click_handler, чтобы он извлекал message_id и доставал правильные данные; добавили механизм очистки, чтобы избежать роста памяти. Теперь данные сохраняются по ключам вида `msg_{message_id}`, а не перезаписывают общий `context.user_data`.

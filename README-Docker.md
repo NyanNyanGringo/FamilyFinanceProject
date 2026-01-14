@@ -1,204 +1,204 @@
-# Docker Deployment Guide for FamilyFinanceProject
+# Руководство по развёртыванию FamilyFinanceProject в Docker
 
-Simple Docker setup for running the Telegram bot on VDS/VPS servers.
+Простая Docker-настройка для запуска Telegram-бота на VDS/VPS серверах.
 
-## 🚀 Quick Start (Local Testing)
+## 🚀 Быстрый старт (локальное тестирование)
 
 ```bash
-# 1. Clone repository
+# 1. Клонируйте репозиторий
 git clone <your-repo-url>
 cd FamilyFinanceProject
 
-# 2. Setup environment
+# 2. Настройте окружение
 cp .env.example .env
-# Edit .env with your API keys
+# Отредактируйте .env и укажите ваши ключи
 
-# 3. Add Google credentials
-# Place your .google_service_account_credentials.json in project root
+# 3. Добавьте Google-креды
+# Поместите файл .google_service_account_credentials.json в корень проекта
 
-# 4. Run
+# 4. Запустите
 docker-compose up -d
 ```
 
-## 🖥️ VDS/VPS Deployment
+## 🖥️ Развёртывание на VDS/VPS
 
-### 🚀 One-Command Deployment (Recommended)
+### 🚀 Развёртывание одной командой (рекомендуется)
 
-Uses Docker Context for seamless remote deployment:
+Использует Docker Context для удобного удалённого деплоя:
 
 ```bash
-# 1. Run deployment script (first time setup + deploy)
+# 1. Запустите скрипт деплоя (первичная настройка + деплой)
 ./deploy-simple.sh myvps
 
-# 2. For updates, just run again
+# 2. Для обновления просто запустите снова
 ./deploy-simple.sh myvps
 ```
 
-The script will:
-- Ask for your VPS IP and SSH username
-- Create Docker context automatically
-- Deploy your bot to VPS
-- Switch back to local development
+Скрипт:
+- Спросит IP вашего VPS и SSH-пользователя
+- Автоматически создаст Docker context
+- Задеплоит бота на VPS
+- Вернёт контекст обратно на локальную машину
 
-**Prerequisites:**
-- SSH key access to your VPS
-- Docker installed on VPS (script can help with this)
+**Требования:**
+- Доступ по SSH-ключу к вашему VPS
+- Установленный Docker на VPS (скрипт может помочь с установкой)
 
-### 📋 Manual VDS Setup (Alternative)
+### 📋 Ручная настройка VDS (альтернатива)
 
 <details>
-<summary>Click to expand manual setup steps</summary>
+<summary>Нажмите, чтобы раскрыть шаги ручной настройки</summary>
 
-#### Step 1: Install Docker on VDS
+#### Шаг 1: Установите Docker на VDS
 
 ```bash
-# Install Docker
+# Установка Docker
 curl -fsSL https://get.docker.com -o get-docker.sh
 sh get-docker.sh
 
-# Install Docker Compose
+# Установка Docker Compose
 sudo curl -L "https://github.com/docker/compose/releases/download/v2.24.0/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 sudo chmod +x /usr/local/bin/docker-compose
 ```
 
-#### Step 2: Setup Project on VDS
+#### Шаг 2: Разверните проект на VDS
 
 ```bash
-# Clone repository
+# Клонируйте репозиторий
 git clone <your-repo-url>
 cd FamilyFinanceProject
 ```
 
-#### Step 3: Configure Environment (.env file)
+#### Шаг 3: Настройте окружение (файл .env)
 
-Create `.env` file on VDS:
+Создайте файл `.env` на VDS:
 ```bash
 nano .env
 ```
 
-Add your credentials:
+Добавьте ваши креды:
 ```bash
 OPENAI_API_KEY=your_openai_api_key_here
 TELEGRAM_TOKEN=your_telegram_bot_token_here
 GOOGLE_SPREADSHEET_ID=your_google_spreadsheet_id_here
 ```
 
-#### Step 4: Setup Google Credentials
+#### Шаг 4: Настройте Google-креды
 
-Create credentials file on VDS:
+Создайте файл с кредами на VDS:
 ```bash
 nano .google_service_account_credentials.json
 ```
 
-Paste your Google Service Account JSON (the entire content from your credentials file).
+Вставьте JSON сервисного аккаунта Google (полное содержимое файла с кредами).
 
-#### Step 5: Deploy
+#### Шаг 5: Деплой
 
 ```bash
-# Create voice messages directory
+# Создайте директорию для голосовых сообщений
 mkdir -p voice_messages
 
-# Start the bot
+# Запустите бота
 docker-compose up -d
 
-# Check logs
+# Посмотрите логи
 docker-compose logs -f
 ```
 
 </details>
 
-## 📋 Essential Commands
+## 📋 Основные команды
 
 ```bash
-# Start bot
+# Запустить бота
 docker-compose up -d
 
-# Stop bot
+# Остановить бота
 docker-compose down
 
-# View logs
+# Посмотреть логи
 docker-compose logs -f
 
-# Restart bot
+# Перезапустить бота
 docker-compose restart
 
-# Check status
+# Проверить статус
 docker-compose ps
 
-# Health check
+# Проверка здоровья
 docker exec familyfinance-bot /usr/local/bin/healthcheck.sh
 ```
 
-## 🔧 Development Mode
+## 🔧 Режим разработки
 
-For development with live code updates:
+Для разработки с «живыми» обновлениями кода:
 
 ```bash
 docker-compose -f docker-compose.yml -f docker-compose.dev.yml up
 ```
 
-## 🐛 Troubleshooting
+## 🐛 Устранение проблем
 
-### Bot not starting
+### Бот не запускается
 ```bash
-# Check logs for errors
+# Проверьте логи на ошибки
 docker-compose logs
 
-# Verify environment variables
+# Проверьте переменные окружения
 docker exec familyfinance-bot env | grep -E "(OPENAI|TELEGRAM|GOOGLE)"
 
-# Check credentials file
+# Проверьте файл с кредами
 docker exec familyfinance-bot cat /app/.google_service_account_credentials.json
 ```
 
-### High disk usage
+### Высокое использование диска
 ```bash
-# Check voice messages size
+# Проверьте размер voice_messages
 docker exec familyfinance-bot du -sh /app/voice_messages
 
-# Manual cleanup (remove files older than 7 days)
+# Ручная очистка (удалить файлы старше 7 дней)
 docker exec familyfinance-bot find /app/voice_messages -type f -mtime +7 -delete
 ```
 
-### Update bot
+### Обновить бота
 ```bash
-# Using one-command deployment
+# Через деплой одной командой
 ./deploy-simple.sh myvps
 
-# Or manually
+# Или вручную
 git pull
 docker-compose build
 docker-compose up -d
 ```
 
-## 📁 File Structure
+## 📁 Структура файлов
 
 ```
 FamilyFinanceProject/
-├── .env                                    # Your API keys
-├── .google_service_account_credentials.json # Google credentials
-├── docker-compose.yml                     # Production setup
-├── docker-compose.dev.yml                 # Development setup
-├── Dockerfile                            # Container configuration
-├── voice_messages/                       # Audio files (auto-created)
-└── src/                                 # Application code
+├── .env                                     # Ваши API-ключи
+├── .google_service_account_credentials.json  # Google-креды
+├── docker-compose.yml                        # Продакшен-настройки
+├── docker-compose.dev.yml                    # Настройки для разработки
+├── Dockerfile                               # Конфигурация контейнера
+├── voice_messages/                          # Аудиофайлы (создаётся автоматически)
+└── src/                                     # Код приложения
 ```
 
-## ⚠️ Important Notes
+## ⚠️ Важные заметки
 
-- **Voice files accumulate** - monitor disk space and clean manually if needed
-- **Keep credentials secure** - never commit `.env` or credentials to git
-- **Bot uses polling** - no need to open ports or setup webhooks
-- **Container auto-restarts** - if bot crashes, it will restart automatically
+- **Голосовые файлы накапливаются** — следите за местом на диске и при необходимости очищайте вручную
+- **Держите креды в безопасности** — никогда не коммитьте `.env` и файлы с кредами в git
+- **Бот работает через polling** — не нужно открывать порты или настраивать webhooks
+- **Контейнер автоматически перезапускается** — если бот упадёт, он стартует снова
 
-## 🆘 Support
+## 🆘 Поддержка
 
-If the bot doesn't work:
-1. Check logs: `docker-compose logs -f`
-2. Verify all 3 environment variables are set correctly
-3. Ensure Google credentials JSON is valid
-4. Make sure your Google Sheet is shared with the service account email
+Если бот не работает:
+1. Проверьте логи: `docker-compose logs -f`
+2. Убедитесь, что все 3 переменные окружения заданы корректно
+3. Убедитесь, что JSON с Google-кредами валиден
+4. Убедитесь, что ваш Google Sheet расшарен на email сервисного аккаунта
 
 ---
 
-**That's it! Your bot should now be running on your VDS! 🤖**
+**Готово! Теперь ваш бот должен быть запущен на VDS! 🤖**
