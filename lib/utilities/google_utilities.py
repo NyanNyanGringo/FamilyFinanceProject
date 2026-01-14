@@ -24,7 +24,21 @@ LOGGER = get_logger(__name__)
 
 
 load_dotenv()
-SPREADSHEET_ID = os.getenv("GOOGLE_SPREADSHEET_ID")
+
+
+def _is_dev_mode() -> bool:
+    return os.getenv("DEV", "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _get_spreadsheet_id() -> str:
+    spreadsheet_env_var = "GOOGLE_SPREADSHEET_ID_DEV" if _is_dev_mode() else "GOOGLE_SPREADSHEET_ID"
+    spreadsheet_id = os.getenv(spreadsheet_env_var)
+    if not spreadsheet_id:
+        raise ValueError(f"Missing required environment variable: {spreadsheet_env_var}")
+    return spreadsheet_id
+
+
+SPREADSHEET_ID = _get_spreadsheet_id()
 
 
 def _authenticate_with_google():

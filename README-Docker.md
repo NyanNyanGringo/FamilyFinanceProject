@@ -81,7 +81,15 @@ nano .env
 OPENAI_API_KEY=your_openai_api_key_here
 TELEGRAM_TOKEN=your_telegram_bot_token_here
 GOOGLE_SPREADSHEET_ID=your_google_spreadsheet_id_here
+
+# Optional: set DEV=true to use the dev spreadsheet
+DEV=
+TELEGRAM_TOKEN_DEV=
+GOOGLE_SPREADSHEET_ID_DEV=
 ```
+
+Для запуска prod и dev параллельно используйте:
+`docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d`
 
 #### Шаг 4: Настройте Google-креды
 

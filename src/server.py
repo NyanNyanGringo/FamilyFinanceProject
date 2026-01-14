@@ -1081,7 +1081,16 @@ async def set_bot_commands(application: Application) -> None:
 
 
 def run() -> None:
-    application = Application.builder().token(os.getenv("TELEGRAM_TOKEN")).build()
+    dev_mode = os.getenv("DEV", "").strip().lower() in {"1", "true", "yes", "on"}
+    token_env_var = "TELEGRAM_TOKEN_DEV" if dev_mode else "TELEGRAM_TOKEN"
+    token = os.getenv(token_env_var)
+    if not token:
+        raise ValueError(f"Missing required environment variable: {token_env_var}")
+
+    if dev_mode:
+        LOGGER.warning("!!! RUNNING IN DEV MODE !!!")
+
+    application = Application.builder().token(token).build()
 
     # Устанавливаем глобальный обработчик ошибок
     application.add_error_handler(global_error_handler)

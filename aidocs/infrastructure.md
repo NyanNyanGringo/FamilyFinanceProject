@@ -75,7 +75,10 @@ docker-compose up -d
 - Содержит:
   - OPENAI_API_KEY
   - TELEGRAM_TOKEN
+  - TELEGRAM_TOKEN_DEV
+  - DEV
   - GOOGLE_SPREADSHEET_ID
+  - GOOGLE_SPREADSHEET_ID_DEV
 
 ## Обслуживание
 

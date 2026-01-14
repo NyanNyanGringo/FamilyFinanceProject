@@ -11,6 +11,16 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# Determine dev mode once for consistent env validation
+is_dev_mode() {
+    local normalized
+    normalized="$(echo "${DEV:-}" | tr '[:upper:]' '[:lower:]' | xargs)"
+    if [ "$normalized" = "1" ] || [ "$normalized" = "true" ] || [ "$normalized" = "yes" ] || [ "$normalized" = "on" ]; then
+        return 0
+    fi
+    return 1
+}
+
 # Health check function
 check_health() {
     local exit_code=0
@@ -43,27 +53,47 @@ check_health() {
     fi
     
     # Check 4: Google credentials file exists and is readable
-    if [ ! -f "/app/google_service_account_credentials.json" ]; then
+    local creds_path="/app/.google_service_account_credentials.json"
+    if [ ! -f "$creds_path" ]; then
+        creds_path="/app/google_service_account_credentials.json"
+    fi
+    if [ ! -f "$creds_path" ]; then
         echo -e "${RED}Google credentials file not found${NC}" >&2
         exit_code=1
-    elif [ ! -r "/app/google_service_account_credentials.json" ]; then
+    elif [ ! -r "$creds_path" ]; then
         echo -e "${RED}Google credentials file not readable${NC}" >&2
         exit_code=1
     fi
     
     # Check 5: Environment variables are set
     local missing_vars=()
+    local is_dev=false
+    if is_dev_mode; then
+        is_dev=true
+    fi
     
     if [ -z "$OPENAI_API_KEY" ]; then
         missing_vars+=("OPENAI_API_KEY")
     fi
     
-    if [ -z "$TELEGRAM_TOKEN" ]; then
-        missing_vars+=("TELEGRAM_TOKEN")
+    if [ "$is_dev" = true ]; then
+        if [ -z "$TELEGRAM_TOKEN_DEV" ]; then
+            missing_vars+=("TELEGRAM_TOKEN_DEV")
+        fi
+    else
+        if [ -z "$TELEGRAM_TOKEN" ]; then
+            missing_vars+=("TELEGRAM_TOKEN")
+        fi
     fi
     
-    if [ -z "$GOOGLE_SPREADSHEET_ID" ]; then
-        missing_vars+=("GOOGLE_SPREADSHEET_ID")
+    if [ "$is_dev" = true ]; then
+        if [ -z "$GOOGLE_SPREADSHEET_ID_DEV" ]; then
+            missing_vars+=("GOOGLE_SPREADSHEET_ID_DEV")
+        fi
+    else
+        if [ -z "$GOOGLE_SPREADSHEET_ID" ]; then
+            missing_vars+=("GOOGLE_SPREADSHEET_ID")
+        fi
     fi
     
     if [ ${#missing_vars[@]} -ne 0 ]; then
@@ -129,7 +159,9 @@ check_health_verbose() {
     echo -e "${BLUE}=== Environment Variables ===${NC}"
     echo "OPENAI_API_KEY: $([ -n "$OPENAI_API_KEY" ] && echo 'Set' || echo 'Not set')"
     echo "TELEGRAM_TOKEN: $([ -n "$TELEGRAM_TOKEN" ] && echo 'Set' || echo 'Not set')"
+    echo "TELEGRAM_TOKEN_DEV: $([ -n "$TELEGRAM_TOKEN_DEV" ] && echo 'Set' || echo 'Not set')"
     echo "GOOGLE_SPREADSHEET_ID: $([ -n "$GOOGLE_SPREADSHEET_ID" ] && echo 'Set' || echo 'Not set')"
+    echo "GOOGLE_SPREADSHEET_ID_DEV: $([ -n "$GOOGLE_SPREADSHEET_ID_DEV" ] && echo 'Set' || echo 'Not set')"
     echo "DEV: ${DEV:-Not set}"
     echo "AUDIO_CLEANUP_DAYS: ${AUDIO_CLEANUP_DAYS:-7}"
     echo "AUDIO_CLEANUP_ON_START: ${AUDIO_CLEANUP_ON_START:-true}"
