@@ -14,6 +14,7 @@ from googleapiclient.discovery import build
 from lib.utilities.date_utilities import get_google_sheets_current_date
 from config import GOOGLE_SCOPES
 from lib.utilities.os_utilities import _get_root_path
+from googleapiclient.errors import HttpError
 
 
 # LOGGING
@@ -84,6 +85,42 @@ def _get_sheet_ids() -> dict:
     return sheet_ids
 
 
+def _get_sheet_row_count(list_name) -> int:
+    """
+    Возвращает количество строк листа по его названию.
+    """
+    response = _SERVICE.spreadsheets().get(
+        spreadsheetId=SPREADSHEET_ID,
+        fields="sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))"
+    ).execute()
+    for sheet in response.get("sheets", []):
+        props = sheet.get("properties", {})
+        if props.get("title") == str(list_name):
+            return props.get("gridProperties", {}).get("rowCount", 0)
+    return 0
+
+
+def ensure_min_rows(list_name, min_rows: int = 7) -> None:
+    """
+    Гарантирует, что лист имеет не меньше min_rows строк (нужно для вставки над строкой 7).
+    """
+    row_count = _get_sheet_row_count(list_name)
+    if row_count >= min_rows:
+        return
+    append_request = {
+        "appendDimension": {
+            "sheetId": _SHEETS_IDS.get(list_name),
+            "dimension": "ROWS",
+            "length": min_rows - row_count,
+        }
+    }
+    _SERVICE.spreadsheets().batchUpdate(
+        spreadsheetId=SPREADSHEET_ID,
+        body={"requests": [append_request]}
+    ).execute()
+    LOGGER.info(f"Extended sheet {list_name} rows from {row_count} to {min_rows}")
+
+
 _CREDS = _authenticate_with_google()
 _SERVICE = build("sheets", "v4", credentials=_CREDS)
 _SHEETS_IDS = _get_sheet_ids()
@@ -135,6 +172,14 @@ class Category:
     def get_accounts(cls) -> list:
         cls._update()
         return cls._accounts
+
+    @classmethod
+    def force_update(cls):
+        """
+        Принудительно сбрасывает кэш и перечитывает данные из таблицы.
+        """
+        cls._last_update_time = None
+        cls._update()
 
     @classmethod
     def _update(cls):
@@ -337,6 +382,27 @@ def get_values(cell_range: str or ConfigRange, transform_to_single_list: bool = 
     return values
 
 
+def update_values(range_name: str, values: list[list], value_input_option: str = "USER_ENTERED") -> dict:
+    """
+    Обновляет значения в указанном диапазоне Google Sheets.
+
+    Args:
+        range_name (str): Диапазон для обновления (например, '⚙️Настройки!A18:B29').
+        values (list[list]): Двумерный список значений.
+        value_input_option (str): Способ записи ('USER_ENTERED' или 'RAW').
+
+    Returns:
+        dict: Ответ от Google Sheets API.
+    """
+    request = _SERVICE.spreadsheets().values().update(
+        spreadsheetId=SPREADSHEET_ID,
+        range=range_name,
+        valueInputOption=value_input_option,
+        body={"values": values},
+    )
+    return request.execute()
+
+
 def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) -> dict:
     """
     Создает запрос для вставки новой строки в Google Sheets.
@@ -354,10 +420,6 @@ def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) ->
     sheet_id = _SHEETS_IDS.get(list_name)
     
     # Подробное логирование для отладки
-    LOGGER.info(f"Getting sheet_id for list_name: '{list_name}' (type: {type(list_name)})")
-    LOGGER.info(f"Available sheet keys: {list(_SHEETS_IDS.keys())}")
-    LOGGER.info(f"Sheet ID found: {sheet_id}")
-    
     if sheet_id is None or sheet_id == 0:
         # Если ID не найден или равен 0, выведем ошибку
         raise ValueError(f"Invalid sheet ID {sheet_id} for list name '{list_name}'. Available sheets: {list(_SHEETS_IDS.keys())}")
@@ -571,6 +633,85 @@ def insert_and_update_row_batch_update(request_data: RequestData):
     LOGGER.info(f"{response=}")
 
     return response
+
+
+def reset_input_sheet_preserve_template(list_name: ListName) -> None:
+    """
+    Удаляет все заполненные строки на вводном листе, сохраняя нижнюю пустую шаблонную строку.
+
+    Алгоритм:
+    - читаем значения в колонке A, начиная с 7-й строки;
+    - count = len(values); если count > 0 — удаляем строки [6, 6+count) (0-based);
+    - пустая строка сразу под блоком останется и поднимется на 7-ю строку.
+    """
+    row_count = _get_sheet_row_count(list_name)
+    if row_count <= 6:
+        LOGGER.info(f"Sheet {list_name} has no data rows (row_count={row_count}), skip reset.")
+        return
+
+    range_name = f"{list_name}!A7:A{row_count}"
+    result = _SERVICE.spreadsheets().values().get(
+        spreadsheetId=SPREADSHEET_ID,
+        range=range_name
+    ).execute()
+    values = result.get("values", [])
+
+    rows_to_delete = len(values)
+    if rows_to_delete <= 0:
+        LOGGER.info(f"No rows to reset for {list_name}")
+        return
+
+    delete_request = {
+        "deleteDimension": {
+            "range": {
+                "sheetId": _SHEETS_IDS.get(list_name),
+                "dimension": "ROWS",
+                "startIndex": 6,
+                "endIndex": 6 + rows_to_delete
+            }
+        }
+    }
+
+    body = {"requests": [delete_request]}
+    try:
+        _SERVICE.spreadsheets().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body=body
+        ).execute()
+        LOGGER.info(f"Reset {rows_to_delete} rows on sheet {list_name}, template preserved.")
+    except HttpError as e:
+        message = str(e)
+        if "not possible to delete all non-frozen rows" in message:
+            if rows_to_delete <= 1:
+                LOGGER.warning(
+                    f"Skip reset for {list_name}: cannot delete last non-frozen row (rows_to_delete={rows_to_delete})."
+                )
+                return
+            adjusted_delete = rows_to_delete - 1
+            LOGGER.warning(
+                f"Retry reset for {list_name} with adjusted rows ({adjusted_delete}) "
+                "to avoid deleting all non-frozen rows."
+            )
+            delete_request["deleteDimension"]["range"]["endIndex"] = 6 + adjusted_delete
+            _SERVICE.spreadsheets().batchUpdate(
+                spreadsheetId=SPREADSHEET_ID,
+                body={"requests": [delete_request]}
+            ).execute()
+            LOGGER.info(f"Reset {adjusted_delete} rows on sheet {list_name}, template preserved (adjusted).")
+        else:
+            LOGGER.error(f"Failed to reset sheet {list_name}: {e}")
+            raise
+
+
+def reset_dev_input_sheets():
+    """
+    Выполняет reset для всех вводных листов DEV: расходы, доходы, переводы.
+    """
+    for list_name in (ListName.expenses, ListName.incomes, ListName.transfers):
+        reset_input_sheet_preserve_template(list_name)
+    # После ресета гарантируем наличие хотя бы 7 строк (шапка + шаблонная строка)
+    for list_name in (ListName.expenses, ListName.incomes, ListName.transfers):
+        ensure_min_rows(list_name, 7)
 
 
 def get_memories() -> list[str]:

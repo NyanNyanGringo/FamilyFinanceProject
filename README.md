@@ -63,3 +63,17 @@ cp .env.example .env
 /models
 - /vosk-model-small-ru-0.22
 ```
+
+## DEV seed (исторические данные)
+- Заполнить лист настроек и сгенерировать исторические операции в DEV-таблицу:
+```
+poetry run python -c "from src.dev_seed import run_dev_seed; run_dev_seed(seed=123, overwrite_settings=True, reset=True)"
+```
+- Запустить только симуляцию (без записи) или настроить параметры можно через функции в `src/dev_seed.py`.
+- Тесты симуляции:
+```
+poetry run python -m unittest discover -s tests -q
+
+- Чтобы сделать Reset данных выполните:
+poetry run python -c "from lib.utilities.google_utilities import reset_dev_input_sheets; reset_dev_input_sheets()"
+```
