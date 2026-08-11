@@ -9,6 +9,7 @@ RUN --mount=type=cache,target=/var/cache/apt \
         build-essential \
         ffmpeg \
         curl \
+        procps \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
