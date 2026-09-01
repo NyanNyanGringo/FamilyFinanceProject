@@ -1,9 +1,12 @@
 import unittest
 from datetime import date
+from unittest.mock import patch
 
+from src import dev_seed
 from src.dev_seed import (
     DataOverrides,
     SimulationConfig,
+    SimulationResult,
     date_to_serial,
     sheet_serial_to_date,
     simulate_dev_history,
@@ -141,6 +144,42 @@ class DevSeedSimulationTests(unittest.TestCase):
         transfers = [tx for tx in sim.transactions if tx.list_name == ListName.transfers]
         self.assertGreater(len(expenses), 0)
         self.assertGreater(len(transfers), 0)
+
+    def test_apply_uses_fresh_batch_update_seam(self):
+        transaction = dev_seed.RequestData(
+            list_name=ListName.expenses,
+            expenses_category="Продукты",
+            account="ACC1",
+            amount=100,
+        )
+        simulation = SimulationResult(
+            run_id="test-run",
+            seed=1,
+            transactions=[transaction],
+            ledger_summary={},
+        )
+        insert_request = {"insert": True}
+        update_request = {"update": True}
+
+        with patch.object(dev_seed, "ensure_min_rows"), patch.object(
+            dev_seed,
+            "get_insert_row_above_request",
+            return_value=insert_request,
+        ), patch.object(
+            dev_seed,
+            "get_update_cells_request",
+            return_value=update_request,
+        ), patch.object(
+            dev_seed,
+            "batch_update",
+        ) as batch_update:
+            report = dev_seed.apply_dev_history(simulation, reset=False)
+
+        batch_update.assert_called_once_with(
+            {"requests": [insert_request, update_request]}
+        )
+        self.assertEqual(report.inserted, 1)
+        self.assertEqual(report.batches_sent, 1)
 
 
 if __name__ == "__main__":

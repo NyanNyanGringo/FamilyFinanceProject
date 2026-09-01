@@ -1,12 +1,18 @@
 import logging
+from typing import Optional
 
 from openai import OpenAI
 import json
 
 from pydantic import BaseModel
 
-from lib.utilities import google_utilities
-from lib.utilities.google_utilities import Status, ConfigRange, OperationTypes, Category, get_memories
+from lib.utilities.google_utilities import (
+    FinanceConfigSnapshot,
+    OperationTypes,
+    Status,
+    get_finance_config,
+    get_memories,
+)
 
 
 # LOGGING
@@ -21,7 +27,7 @@ LOGGER = get_logger(__name__)
 CLIENT = OpenAI()
 
 
-def _get_memory_context() -> str:
+def get_memory_context() -> str:
     """
     Получает контекст воспоминаний для добавления в системные сообщения.
     
@@ -55,7 +61,7 @@ def text2text(prompt: str, model: str = "gpt-4o-mini") -> str:
     response = CLIENT.chat.completions.create(
         model=model,
         messages=[
-            {"role": "system", "content": _get_memory_context() + "Ты должен ответить только в формате JSON, строго по схеме. Не добавляй никакого текста вне JSON. Если не хватает данных — используй значения по умолчанию, указанные в схеме."},
+            {"role": "system", "content": get_memory_context() + "Ты должен ответить только в формате JSON, строго по схеме. Не добавляй никакого текста вне JSON. Если не хватает данных — используй значения по умолчанию, указанные в схеме."},
             {"role": "user", "content": prompt}
         ],
     )
@@ -77,20 +83,22 @@ def audio2text(audio_path: str, prompt: str = "") -> str:
     Returns:
         str: Распознанный текст.
     """
-    audio_file = open(audio_path, "rb")
-
-    transcription = CLIENT.audio.transcriptions.create(
-        model="whisper-1",
-        file=audio_file,
-        prompt=prompt
-    )
+    with open(audio_path, "rb") as audio_file:
+        transcription = CLIENT.audio.transcriptions.create(
+            model="whisper-1",
+            file=audio_file,
+            prompt=prompt,
+        )
 
     LOGGER.info(transcription)
 
     return transcription.text
 
 
-def audio2text_for_finance(audio_path: str):
+def audio2text_for_finance(
+    audio_path: str,
+    config_snapshot: FinanceConfigSnapshot,
+):
     """
     Преобразует аудиофайл в текст с финансовым контекстом для FamilyFinanceProject.
 
@@ -100,18 +108,21 @@ def audio2text_for_finance(audio_path: str):
     Returns:
         str: Распознанный текст с учётом категорий расходов, доходов и счетов.
     """
-    prompt = f"Ты помощник, который транскрибирует запрос пользователя о денежной операции. Используй следующие " \
-             f"категории расходов, доходов, а также список счетов для лучшего понимания контекста:\n" \
-             f"Категории расходов: {google_utilities.get_values(cell_range=ConfigRange.expenses,transform_to_single_list=True)}" \
-             f"Категории доходов: {google_utilities.get_values(cell_range=ConfigRange.incomes, transform_to_single_list=True)}\n" \
-             f"Счета: {google_utilities.get_values(cell_range=ConfigRange.accounts, transform_to_single_list=True)}"
+    prompt = (
+        "Ты помощник, который транскрибирует запрос пользователя о денежной операции. "
+        "Используй следующие категории расходов, доходов, а также список счетов "
+        "для лучшего понимания контекста:\n"
+        f"Категории расходов: {list(config_snapshot.expenses)}\n"
+        f"Категории доходов: {list(config_snapshot.incomes)}\n"
+        f"Счета: {list(config_snapshot.accounts)}"
+    )
     return audio2text(audio_path, prompt=prompt)
 
 
 # private
 
 
-def _get_adjustment_response_format() -> dict:
+def _get_adjustment_response_format(config_snapshot: FinanceConfigSnapshot) -> dict:
     response_format = {
         "type": "json_schema",
         "json_schema": {
@@ -127,7 +138,7 @@ def _get_adjustment_response_format() -> dict:
                             "strict": True,
                             "items": {
                                 "type": "string",
-                                "enum": Category.get_accounts()
+                                "enum": list(config_snapshot.accounts)
                             }
                         },
                     "adjustment_amount":
@@ -180,7 +191,7 @@ def _get_adjustment_response_format() -> dict:
     return response_format
 
 
-def _get_transfer_response_format() -> dict:
+def _get_transfer_response_format(config_snapshot: FinanceConfigSnapshot) -> dict:
     response_format = {
         "type": "json_schema",
         "json_schema": {
@@ -196,7 +207,7 @@ def _get_transfer_response_format() -> dict:
                             # "description": "Счет списания. Если пользователь не назвал, то None.",
                             "items": {
                                 "type": "string",
-                                "enum": Category.get_accounts()
+                                "enum": list(config_snapshot.accounts)
                             }
                         },
                     "replenishment_account":
@@ -205,7 +216,7 @@ def _get_transfer_response_format() -> dict:
                             # "description": "Счет пополнения. Если пользователь не назвал, то 'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": Category.get_accounts()
+                                "enum": list(config_snapshot.accounts)
                             }
                         },
                     "write_off_amount":
@@ -269,7 +280,7 @@ def _get_transfer_response_format() -> dict:
     return response_format
 
 
-def _get_expenses_response_format() -> dict:
+def _get_expenses_response_format(config_snapshot: FinanceConfigSnapshot) -> dict:
     response_format = {
         "type": "json_schema",
         "json_schema": {
@@ -287,7 +298,7 @@ def _get_expenses_response_format() -> dict:
                                            # "'Другое'.",
                             "items": {
                                 "type": "string",
-                                "enum": Category.get_expenses()
+                                "enum": list(config_snapshot.expenses)
                             }
                         },
                     "account":
@@ -298,7 +309,7 @@ def _get_expenses_response_format() -> dict:
                                            # "то счет будет 'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": Category.get_accounts()
+                                "enum": list(config_snapshot.accounts)
                             }
                         },
                     "amount":
@@ -352,7 +363,7 @@ def _get_expenses_response_format() -> dict:
     return response_format
 
 
-def _get_incomes_response_format() -> dict:
+def _get_incomes_response_format(config_snapshot: FinanceConfigSnapshot) -> dict:
     response_format = {
         "type": "json_schema",
         "json_schema": {
@@ -370,7 +381,7 @@ def _get_incomes_response_format() -> dict:
                                            # "'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": Category.get_incomes()
+                                "enum": list(config_snapshot.incomes)
                             }
                         },
                     "account":
@@ -381,7 +392,7 @@ def _get_incomes_response_format() -> dict:
                                            # "тогда 'None'.",
                             "items": {
                                 "type": "string",
-                                "enum": Category.get_accounts()
+                                "enum": list(config_snapshot.accounts)
                             }
                         },
                     "amount":
@@ -433,7 +444,7 @@ def _get_incomes_response_format() -> dict:
     return response_format
 
 
-def _get_finance_operation_response_format() -> dict:
+def _get_finance_operation_response_format(config_snapshot: FinanceConfigSnapshot) -> dict:
     response_format = {
         "type": "json_schema",
         "json_schema": {
@@ -460,9 +471,9 @@ def _get_finance_operation_response_format() -> dict:
                                                 "strict": True,
                                                 "description": f"Тип денежной операции. Иначе, None.\n"
                                                                f"Дополнительная информация:\n"
-                                                               f"Категории расходов: {Category.get_expenses()}\n"
-                                                               f"Категории доходов: {Category.get_incomes()}\n"
-                                                               f"Счета: {Category.get_accounts()}\n"
+                                                               f"Категории расходов: {list(config_snapshot.expenses)}\n"
+                                                               f"Категории доходов: {list(config_snapshot.incomes)}\n"
+                                                               f"Счета: {list(config_snapshot.accounts)}\n"
                                                                f"Если сомневаешься между Расходы и Доходы - выбирай "
                                                                f"Расходы.",
                                                 "items": {
@@ -506,7 +517,7 @@ def _get_finance_operation_response_format() -> dict:
     return response_format
 
 
-def _get_finance_operation_message(user_message) -> list:
+def _get_finance_operation_message(user_message, memory_context: str = "") -> list:
     messages = [
         {
             "role": "user",
@@ -522,7 +533,7 @@ def _get_finance_operation_message(user_message) -> list:
             "content": [
                 {
                     "type": "text",
-                    "text": _get_memory_context() + "Ты - связующее звено между пользователем и Google Tables. Твоя задача - точно и "
+                    "text": memory_context + "Ты - связующее звено между пользователем и Google Tables. Твоя задача - точно и "
                             "уверенно определить:\n"
                             "1) Относится ли сообщение пользователя к следующим темам: доходы, расходы, бюджет,"
                             "финансы. Пользователь мог записать сообщения в шутку. Также сообщение может быть "
@@ -537,7 +548,7 @@ def _get_finance_operation_message(user_message) -> list:
     return messages
 
 
-def _get_basic_message(user_message) -> list:
+def _get_basic_message(user_message, memory_context: str = "") -> list:
     messages = [
         {
             "role": "user",
@@ -553,7 +564,7 @@ def _get_basic_message(user_message) -> list:
             "content": [
                 {
                     "type": "text",
-                    "text": _get_memory_context() + "Твоя задача точно и уверенно написать json ответ на основе предварительного анализа "
+                    "text": memory_context + "Твоя задача точно и уверенно написать json ответ на основе предварительного анализа "
                             "преобразованного в текст голосового сообщения от пользователя."
                 }
             ]
@@ -570,22 +581,33 @@ class MessageRequest:
     """
     Класс для формирования сообщений-запросов к OpenAI.
     """
-    def __init__(self, user_message):
-        self.finance_operation_request_message: list = _get_finance_operation_message(user_message)
-        self.basic_request_message: list = _get_basic_message(user_message)
+    def __init__(self, user_message, memory_context: Optional[str] = None):
+        resolved_memory_context = (
+            get_memory_context() if memory_context is None else memory_context
+        )
+        self.finance_operation_request_message: list = _get_finance_operation_message(
+            user_message,
+            resolved_memory_context,
+        )
+        self.basic_request_message: list = _get_basic_message(
+            user_message,
+            resolved_memory_context,
+        )
 
 
 class ResponseFormat:
     """
     Класс для хранения форматов ответов для разных типов операций.
     """
-    def __init__(self):
-        self.adjustment_response_format: dict = _get_adjustment_response_format()
-        self.transfer_response_format: dict = _get_transfer_response_format()
-        self.expenses_response_format: dict = _get_expenses_response_format()
-        self.incomes_response_format: dict = _get_incomes_response_format()
+    def __init__(self, config_snapshot: Optional[FinanceConfigSnapshot] = None):
+        snapshot = config_snapshot or get_finance_config().snapshot
+        self.config_snapshot = snapshot
+        self.adjustment_response_format: dict = _get_adjustment_response_format(snapshot)
+        self.transfer_response_format: dict = _get_transfer_response_format(snapshot)
+        self.expenses_response_format: dict = _get_expenses_response_format(snapshot)
+        self.incomes_response_format: dict = _get_incomes_response_format(snapshot)
 
-        self.finance_operation_response: dict = _get_finance_operation_response_format()
+        self.finance_operation_response: dict = _get_finance_operation_response_format(snapshot)
 
 
 class Model:

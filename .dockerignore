@@ -3,8 +3,11 @@
 .google_service_account_credentials.json
 
 # Folders
+.git
 venv
+.venv
 voice_messages
+voice_messages_dev
 
 # MacOS Files
 .DS_Store

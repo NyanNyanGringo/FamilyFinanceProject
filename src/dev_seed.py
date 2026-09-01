@@ -6,10 +6,10 @@ from dataclasses import dataclass, field
 from datetime import date, datetime, timedelta
 from typing import Dict, List, Optional, Sequence, Tuple
 
-from lib.utilities.google_utilities import (_SERVICE,  # type: ignore
-                                            SPREADSHEET_ID, Category, ListName,
+from lib.utilities.google_utilities import (Category, ListName,
                                             OperationTypes, RequestData,
                                             Status, TransferType,
+                                            batch_update,
                                             ensure_min_rows,
                                             get_insert_row_above_request,
                                             get_update_cells_request,
@@ -652,9 +652,7 @@ def apply_dev_history(
     total_batches = (len(requests) + batch_size * 2 - 1) // (batch_size * 2)
     for i in range(0, len(requests), batch_size * 2):
         chunk = requests[i : i + batch_size * 2]
-        _SERVICE.spreadsheets().batchUpdate(
-            spreadsheetId=SPREADSHEET_ID, body={"requests": chunk}
-        ).execute()
+        batch_update({"requests": chunk})
         batches_sent += 1
         if batches_sent % 5 == 0 or batches_sent == total_batches:
             LOGGER.info(

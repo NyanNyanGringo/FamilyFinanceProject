@@ -1,6 +1,6 @@
 #!/bin/bash
 # Entrypoint script for FamilyFinanceProject Docker container
-# Handles initialization, audio cleanup, and application startup
+# Handles initialization and application startup
 
 set -e
 
@@ -125,8 +125,8 @@ create_directories() {
     log_success "Directories setup complete"
 }
 
-# Audio cleanup functionality removed - voice messages will accumulate
-# Consider manual cleanup if disk space becomes an issue
+# The application removes each message's OGA and WAV files after processing.
+# Periodic and historical audio cleanup is intentionally disabled.
 
 # Health check setup
 setup_health_check() {
@@ -144,7 +144,7 @@ show_config() {
     log "Development mode: ${DEV:-false}"
     log "Python version: $(python --version)"
     log "Working directory: $(pwd)"
-    log "Audio cleanup: Disabled (voice files will accumulate)"
+    log "Audio cleanup: Per-message enabled; periodic cleanup disabled"
     log "=============================================="
 }
 

@@ -3,7 +3,7 @@
 Этот документ содержит полную структуру проекта с информацией о файлах, классах и функциях.
 Обновляется автоматически после внесения изменений в проект.
 
-**Последнее обновление:** 2026-08-10 10:03:14
+**Последнее обновление:** 2026-08-11 21:12:18
 **Версия скрипта:** v002
 
 ## Структура проекта
@@ -23,6 +23,7 @@
     ├── 📄 `deploy-simple.sh`
     ├── 📄 `docker-compose.dev.yml`
     ├── 📄 `docker-compose.yml`
+    ├── 📄 `expense_reclassification_apply_report.json`
     ├── 📄 `expense_reclassification_mapping.json`
     ├── 📄 `expense_reclassification_review.md`
     ├── 📄 `pyproject.toml`
@@ -35,13 +36,13 @@
     │     📍 Путь: `test2.py`
     │     ⚡ `read_expenses_sheet()` (строка 19)
     │       📝 Read all data from the expenses sheet.
-    │     ⚡ `parse_expense_record(row, headers)` (строка 42)
+    │     ⚡ `parse_expense_record(row, headers)` (строка 36)
     │       📝 Parse a single expense record into a dictionary.
-    │     ⚡ `analyze_expenses_by_category(expenses, category, start_date=None, end_date=None)` (строка 62)
+    │     ⚡ `analyze_expenses_by_category(expenses, category, start_date=None, end_date=None)` (строка 56)
     │       📝 Analyze expenses for a specific category within a date range.
-    │     ⚡ `get_expense_summary(category=None, months_back=None)` (строка 133)
+    │     ⚡ `get_expense_summary(category=None, months_back=None)` (строка 127)
     │       📝 Get a compact summary of expenses for a category.
-    │     ⚡ `main()` (строка 240)
+    │     ⚡ `main()` (строка 234)
     │       📝 Main function to demonstrate expense data extraction and analysis.
     ├── 📁 **aidocs/** `/Users/user/github/FamilyFinanceProject/aidocs`
     │   ├── 📄 `about_google_sheet.md`
@@ -80,106 +81,129 @@
     │       │     📍 Путь: `lib/utilities/date_utilities.py`
     │       │     ⚡ `get_google_sheets_current_date()` (строка 4)
     │       │       📝 Возвращает текущую дату в формате Google Sheets (количество дней с 30 декабря...
-    │       ├── 📄 `ffmpeg_utilities.py` - 1 функций
+    │       ├── 📄 `ffmpeg_utilities.py` - 2 функций
     │       │     📍 Путь: `lib/utilities/ffmpeg_utilities.py`
-    │       │     ⚡ `convert_oga_to_wav(input_file)` (строка 7)
+    │       │     ⚡ `get_wav_output_path(input_file)` (строка 7)
+    │       │     ⚡ `convert_oga_to_wav(input_file)` (строка 11)
     │       │       📝 :return: path to .wav file
-    │       ├── 📄 `google_utilities.py` - 9 класс(ов), 18 функций
+    │       ├── 📄 `google_utilities.py` - 14 класс(ов), 32 функций
     │       │     📍 Путь: `lib/utilities/google_utilities.py`
-    │       │     ⚡ `_is_dev_mode()` (строка 30)
-    │       │     ⚡ `_get_spreadsheet_id()` (строка 34)
-    │       │     ⚡ `_authenticate_with_google()` (строка 45)
+    │       │     ⚡ `_is_dev_mode()` (строка 37)
+    │       │     ⚡ `_get_spreadsheet_id()` (строка 41)
+    │       │     ⚡ `_authenticate_with_google()` (строка 73)
     │       │       📝 Аутентифицирует пользователя с помощью Google Service Account и возвращает об...
-    │       │     ⚡ `_get_sheet_ids()` (строка 62)
+    │       │     ⚡ `_get_credentials()` (строка 95)
+    │       │     ⚡ `_build_service(timeout_seconds)` (строка 104)
+    │       │     ⚡ `_close_service(service)` (строка 119)
+    │       │     ⚡ `_is_transient_google_error(error)` (строка 128)
+    │       │     ⚡ `_execute_read(request_factory, attempts=...)` (строка 151)
+    │       │     ⚡ `_execute_write(request_factory)` (строка 181)
+    │       │     ⚡ `_get_sheet_ids(force_refresh=False)` (строка 204)
     │       │       📝 Получает идентификаторы всех листов в Google Spreadsheet.
-    │       │     ⚡ `_get_sheet_row_count(list_name)` (строка 88)
+    │       │     ⚡ `_get_sheet_row_count(list_name)` (строка 234)
     │       │       📝 Возвращает количество строк листа по его названию.
-    │       │     ⚡ `ensure_min_rows(list_name, min_rows=7)` (строка 103)
+    │       │     ⚡ `ensure_min_rows(list_name, min_rows=7)` (строка 251)
     │       │       📝 Гарантирует, что лист имеет не меньше min_rows строк (нужно для вставки над с...
-    │       │     ⚡ `get_values(cell_range, transform_to_single_list=False)` (строка 356)
+    │       │     ⚡ `_single_column_values(value_range)` (строка 313)
+    │       │     ⚡ `_normalize_a1_range(range_name)` (строка 326)
+    │       │     ⚡ `_load_finance_config_snapshot()` (строка 332)
+    │       │     ⚡ `get_finance_config()` (строка 433)
+    │       │     ⚡ `reload_finance_config()` (строка 437)
+    │       │     ⚡ `get_values(cell_range, transform_to_single_list=False)` (строка 623)
     │       │       📝 Получает значения из Google Sheets по указанному диапазону.
-    │       │     ⚡ `update_values(range_name, values, value_input_option='USER_ENTERED')` (строка 385)
+    │       │     ⚡ `update_values(range_name, values, value_input_option='USER_ENTERED')` (строка 652)
     │       │       📝 Обновляет значения в указанном диапазоне Google Sheets.
-    │       │     ⚡ `get_insert_row_above_request(list_name, insert_above_row)` (строка 406)
+    │       │     ⚡ `batch_update(body)` (строка 674)
+    │       │       📝 Executes one Google Sheets batchUpdate without automatic write retries.
+    │       │     ⚡ `get_insert_row_above_request(list_name, insert_above_row)` (строка 684)
     │       │       📝 Создает запрос для вставки новой строки в Google Sheets.
-    │       │     ⚡ `get_update_cells_request(list_name, values_to_update, row_index=6, column_index=0)` (строка 439)
+    │       │     ⚡ `get_update_cells_request(list_name, values_to_update, row_index=6, column_index=0)` (строка 721)
     │       │       📝 Создает запрос для обновления ячеек в Google Sheets.
-    │       │     ⚡ `get_values_to_update_for_request(request_data)` (строка 464)
+    │       │     ⚡ `get_values_to_update_for_request(request_data)` (строка 747)
     │       │       📝 Формирует список значений для обновления в Google Sheets на основе данных зап...
-    │       │     ⚡ `delete_row_by_telegram_id(list_name, telegram_message_id)` (строка 533)
+    │       │     ⚡ `_telegram_id_column(list_name)` (строка 816)
+    │       │     ⚡ `find_rows_by_telegram_id(list_name, telegram_message_id)` (строка 828)
+    │       │     ⚡ `delete_row_by_telegram_id(list_name, telegram_message_id)` (строка 848)
     │       │       📝 Удаляет строку из Google Sheets по Telegram message ID.
-    │       │     ⚡ `insert_and_update_row_batch_update(request_data)` (строка 605)
+    │       │     ⚡ `insert_and_update_row_batch_update(request_data)` (строка 901)
     │       │       📝 Выполняет пакетное обновление Google Sheets: вставляет новую строку и обновля...
-    │       │     ⚡ `reset_input_sheet_preserve_template(list_name)` (строка 638)
+    │       │     ⚡ `reset_input_sheet_preserve_template(list_name)` (строка 938)
     │       │       📝 Удаляет все заполненные строки на вводном листе, сохраняя нижнюю пустую шабло...
-    │       │     ⚡ `reset_dev_input_sheets()` (строка 706)
+    │       │     ⚡ `reset_dev_input_sheets()` (строка 1012)
     │       │       📝 Выполняет reset для всех вводных листов DEV: расходы, доходы, переводы.
-    │       │     ⚡ `get_memories()` (строка 717)
+    │       │     ⚡ `get_memories()` (строка 1023)
     │       │       📝 Получает список сохранённых воспоминаний из ячейки A1 листа #memory.
-    │       │     ⚡ `add_memory(memory_text)` (строка 739)
+    │       │     ⚡ `add_memory(memory_text)` (строка 1045)
     │       │       📝 Добавляет новое воспоминание в ячейку A1 листа #memory.
-    │       │     ⚡ `delete_memory(memory_index)` (строка 775)
+    │       │     ⚡ `delete_memory(memory_index)` (строка 1082)
     │       │       📝 Удаляет воспоминание по индексу из ячейки A1 листа #memory.
-    │       │     🏛️ `_GoogleBaseEnumClass`(Enum) (строка 129)
+    │       │     🏛️ `GoogleWriteOutcomeUnknownError`(RuntimeError) (строка 69)
+    │       │     🏛️ `_GoogleBaseEnumClass`(Enum) (строка 275)
     │       │       📝 Базовый класс для перечислений Google с дополнительными методами.
-    │       │       └─ `__str__(self)` (строка 133) [magic]
-    │       │       └─ `values(cls)` (строка 137) [@classmethod]
-    │       │       └─ `get_item(cls, value)` (строка 141) [@classmethod]
-    │       │     🏛️ `Category` (строка 148)
-    │       │       📝 Класс для работы с категориями расходов, доходов и счетов.
-    │       │       └─ `__init__(self)` (строка 157) [magic]
-    │       │       └─ `get_expenses(cls)` (строка 162) [@classmethod]
-    │       │       └─ `get_incomes(cls)` (строка 167) [@classmethod]
-    │       │       └─ `get_accounts(cls)` (строка 172) [@classmethod]
-    │       │       └─ `force_update(cls)` (строка 177) [@classmethod]
-    │       │       └─ `_update(cls)` (строка 185) [@classmethod]
-    │       │     🏛️ `Formulas`(str, _GoogleBaseEnumClass) (строка 200)
+    │       │       └─ `__str__(self)` (строка 279) [magic]
+    │       │       └─ `values(cls)` (строка 283) [@classmethod]
+    │       │       └─ `get_item(cls, value)` (строка 287) [@classmethod]
+    │       │     🏛️ `FinanceConfigSnapshot` (строка 295)
+    │       │     🏛️ `FinanceConfigResult` (строка 303)
+    │       │     🏛️ `FinanceConfigUnavailableError`(RuntimeError) (строка 309)
+    │       │     🏛️ `FinanceConfigCache` (строка 377)
+    │       │       └─ `__init__(self, loader=..., ttl_seconds=..., monotonic=...)` (строка 378) [magic]
+    │       │       └─ `get(self, force_refresh=False)` (строка 391)
+    │       │       └─ `_is_fresh(self, now)` (строка 424)
+    │       │     🏛️ `Category` (строка 441)
+    │       │       📝 Compatibility facade for code that does not yet pass a snapshot.
+    │       │       └─ `__init__(self)` (строка 444) [magic]
+    │       │       └─ `get_expenses(cls)` (строка 451) [@classmethod]
+    │       │       └─ `get_incomes(cls)` (строка 455) [@classmethod]
+    │       │       └─ `get_accounts(cls)` (строка 459) [@classmethod]
+    │       │       └─ `force_update(cls)` (строка 463) [@classmethod]
+    │       │     🏛️ `Formulas`(str, _GoogleBaseEnumClass) (строка 467)
     │       │       📝 Класс-строка для хранения формул Google Tables, используемых в проекте.
-    │       │     🏛️ `OperationTypes`(str, _GoogleBaseEnumClass) (строка 266)
+    │       │     🏛️ `OperationTypes`(str, _GoogleBaseEnumClass) (строка 533)
     │       │       📝 Перечисление типов операций: расходы, переводы, корректировки, доходы.
-    │       │     🏛️ `ListName`(str, _GoogleBaseEnumClass) (строка 276)
+    │       │     🏛️ `ListName`(str, _GoogleBaseEnumClass) (строка 543)
     │       │       📝 Перечисление названий листов для разных типов операций.
-    │       │     🏛️ `Status`(str, _GoogleBaseEnumClass) (строка 287)
+    │       │     🏛️ `Status`(str, _GoogleBaseEnumClass) (строка 554)
     │       │       📝 Перечисление статусов операции: подтверждена, запланирована.
-    │       │     🏛️ `TransferType`(str, _GoogleBaseEnumClass) (строка 295)
+    │       │     🏛️ `TransferType`(str, _GoogleBaseEnumClass) (строка 562)
     │       │       📝 Перечисление типов переводов: перевод, корректировка.
-    │       │     🏛️ `ConfigRange`(str, _GoogleBaseEnumClass) (строка 303)
+    │       │     🏛️ `ConfigRange`(str, _GoogleBaseEnumClass) (строка 570)
     │       │       📝 Перечисление диапазонов ячеек для конфигурации Google Sheets.
-    │       │     🏛️ `RequestData`(BaseModel) (строка 313)
+    │       │     🏛️ `RequestData`(BaseModel) (строка 580)
     │       │       📝 Дата-класс для хранения данных запроса к Google Sheets.
-    │       │       └─ `validate_data(self)` (строка 330)
+    │       │       └─ `validate_data(self)` (строка 597)
     │       ├── 📄 `log_utilities.py` - 1 функций
     │       │     📍 Путь: `lib/utilities/log_utilities.py`
     │       │     ⚡ `get_logger(name='main')` (строка 5)
     │       │       📝 Создаёт и возвращает логгер с заданным именем.
     │       ├── 📄 `openai_utilities.py` - 4 класс(ов), 12 функций
     │       │     📍 Путь: `lib/utilities/openai_utilities.py`
-    │       │     ⚡ `_get_memory_context()` (строка 24)
+    │       │     ⚡ `get_memory_context()` (строка 30)
     │       │       📝 Получает контекст воспоминаний для добавления в системные сообщения.
-    │       │     ⚡ `text2text(prompt, model='gpt-4o-mini')` (строка 44)
+    │       │     ⚡ `text2text(prompt, model='gpt-4o-mini')` (строка 50)
     │       │       📝 Отправляет текстовый запрос в OpenAI и возвращает ответ.
-    │       │     ⚡ `audio2text(audio_path, prompt='')` (строка 69)
+    │       │     ⚡ `audio2text(audio_path, prompt='')` (строка 75)
     │       │       📝 Преобразует аудиофайл в текст с помощью OpenAI Whisper.
-    │       │     ⚡ `audio2text_for_finance(audio_path)` (строка 93)
+    │       │     ⚡ `audio2text_for_finance(audio_path, config_snapshot)` (строка 98)
     │       │       📝 Преобразует аудиофайл в текст с финансовым контекстом для FamilyFinanceProject.
-    │       │     ⚡ `_get_adjustment_response_format()` (строка 114)
-    │       │     ⚡ `_get_transfer_response_format()` (строка 183)
-    │       │     ⚡ `_get_expenses_response_format()` (строка 272)
-    │       │     ⚡ `_get_incomes_response_format()` (строка 355)
-    │       │     ⚡ `_get_finance_operation_response_format()` (строка 436)
-    │       │     ⚡ `_get_finance_operation_message(user_message)` (строка 509)
-    │       │     ⚡ `_get_basic_message(user_message)` (строка 540)
-    │       │     ⚡ `request_data(request_builder)` (строка 618)
+    │       │     ⚡ `_get_adjustment_response_format(config_snapshot)` (строка 125)
+    │       │     ⚡ `_get_transfer_response_format(config_snapshot)` (строка 194)
+    │       │     ⚡ `_get_expenses_response_format(config_snapshot)` (строка 283)
+    │       │     ⚡ `_get_incomes_response_format(config_snapshot)` (строка 366)
+    │       │     ⚡ `_get_finance_operation_response_format(config_snapshot)` (строка 447)
+    │       │     ⚡ `_get_finance_operation_message(user_message, memory_context='')` (строка 520)
+    │       │     ⚡ `_get_basic_message(user_message, memory_context='')` (строка 551)
+    │       │     ⚡ `request_data(request_builder)` (строка 640)
     │       │       📝 Отправляет запрос к OpenAI API и возвращает ответ в формате JSON.
-    │       │     🏛️ `MessageRequest` (строка 569)
+    │       │     🏛️ `MessageRequest` (строка 580)
     │       │       📝 Класс для формирования сообщений-запросов к OpenAI.
-    │       │       └─ `__init__(self, user_message)` (строка 573) [magic]
-    │       │     🏛️ `ResponseFormat` (строка 578)
+    │       │       └─ `__init__(self, user_message, memory_context=None)` (строка 584) [magic]
+    │       │     🏛️ `ResponseFormat` (строка 598)
     │       │       📝 Класс для хранения форматов ответов для разных типов операций.
-    │       │       └─ `__init__(self)` (строка 582) [magic]
-    │       │     🏛️ `Model` (строка 591)
+    │       │       └─ `__init__(self, config_snapshot=None)` (строка 602) [magic]
+    │       │     🏛️ `Model` (строка 613)
     │       │       📝 Класс с названиями моделей OpenAI.
-    │       │     🏛️ `RequestBuilder`(BaseModel) (строка 604)
+    │       │     🏛️ `RequestBuilder`(BaseModel) (строка 626)
     │       │       📝 Дата-класс для построения запроса к OpenAI.
     │       ├── 📄 `os_utilities.py` - 4 функций
     │       │     📍 Путь: `lib/utilities/os_utilities.py`
@@ -191,8 +215,9 @@
     │       │       📝 Возвращает путь к модели Vosk. Бросает ошибку, если модель не найдена.
     │       │     ⚡ `_get_root_path()` (строка 68)
     │       │       📝 Возвращает корневой путь проекта.
-    │       ├── 📄 `telegram_utilities.py`
+    │       ├── 📄 `telegram_utilities.py` - 1 функций
     │       │     📍 Путь: `lib/utilities/telegram_utilities.py`
+    │       │     ⚡ `_remove_partial_download(path)` (строка 14)
     │       └── 📄 `vosk_utilities.py` - 1 функций
     │             📍 Путь: `lib/utilities/vosk_utilities.py`
     │             ⚡ `audio2text(wav_audio_file, frames=4000)` (строка 18)
@@ -425,50 +450,57 @@
     │   │     ⚡ `simulate_dev_history(seed, start_date, end_date, config=..., overrides=...)` (строка 316)
     │   │     ⚡ `apply_dev_history(sim, reset=True, batch_size=200)` (строка 619)
     │   │       📝 Применяет результаты симуляции в DEV-таблицу.
-    │   │     ⚡ `run_dev_seed(seed=None, overwrite_settings=False, reset=True, batch_size=None)` (строка 672)
+    │   │     ⚡ `run_dev_seed(seed=None, overwrite_settings=False, reset=True, batch_size=None)` (строка 670)
     │   │       📝 Удобный вход: читает дату начала, при желании заливает настройки, симулирует ...
     │   │     🏛️ `DevSettingsTemplate` (строка 97)
     │   │     🏛️ `SimulationConfig` (строка 211)
     │   │     🏛️ `DataOverrides` (строка 229)
     │   │     🏛️ `SimulationResult` (строка 236)
     │   │     🏛️ `ApplyReport` (строка 245)
-    │   └── 📄 `server.py` - 1 класс(ов), 11 функций
+    │   └── 📄 `server.py` - 1 класс(ов), 16 функций
     │         📍 Путь: `src/server.py`
-    │         ⚡ `replace_last_string(original_text, text_to_add)` (строка 56)
+    │         ⚡ `build_operation_tracking_id(chat_id, source_message_id, operation_sequence)` (строка 65)
+    │           📝 Build a stable operation ID unique to a Telegram source message.
+    │         ⚡ `replace_last_string(original_text, text_to_add)` (строка 80)
     │           📝 Заменяет последнюю строку в тексте на новую строку.
-    │         ⚡ `format_json_to_telegram_text(json)` (строка 102)
+    │         ⚡ `_remove_audio_files(*paths)` (строка 156)
+    │         ⚡ `_request_openai_data(user_message, response_format, finance_operation, memory_context)` (строка 168)
+    │         ⚡ `format_json_to_telegram_text(json)` (строка 234)
     │           📝 Форматирует JSON-словарь в текст для Telegram.
-    │         ⚡ `is_text_has_status(text)` (строка 119)
+    │         ⚡ `is_text_has_status(text)` (строка 251)
     │           📝 Проверяет, есть ли в тексте строка, начинающаяся с "Статус: ".
-    │         ⚡ `remove_status_in_text(text)` (строка 133)
+    │         ⚡ `remove_status_in_text(text)` (строка 265)
     │           📝 Удаляет строку со статусом из текста, если она существует и находится в после...
-    │         ⚡ `set_status_to_text(text, status)` (строка 152)
+    │         ⚡ `set_status_to_text(text, status)` (строка 284)
     │           📝 Устанавливает новый статус в текст. Если статус уже есть, заменяет его.
-    │         ⚡ `get_delete_button_keyboard(message_id)` (строка 294)
+    │         ⚡ `get_delete_button_keyboard(message_id)` (строка 426)
     │           📝 Создаёт клавиатуру с одной кнопкой "Удалить".
-    │         ⚡ `get_delete_confirmation_keyboard(message_id)` (строка 310)
+    │         ⚡ `get_delete_confirmation_keyboard(message_id)` (строка 442)
     │           📝 Создаёт клавиатуру для подтверждения удаления.
-    │         ⚡ `get_reply_keyboard_markup(use_confirm_button=True, use_reject_button=True, message_id=None)` (строка 329)
+    │         ⚡ `get_reply_keyboard_markup(use_confirm_button=True, use_reject_button=True, message_id=None)` (строка 461)
     │           📝 Создаёт клавиатуру для Telegram с двумя кнопками: "Подтвердить" и "Отменить".
-    │         ⚡ `get_response_format_according_to_operation_type(operation_type)` (строка 372)
+    │         ⚡ `get_response_format_according_to_operation_type(operation_type, response_formats)` (строка 504)
     │           📝 Возвращает формат ответа для указанного типа операции.
-    │         ⚡ `clarify_request_message(request_message)` (строка 394)
+    │         ⚡ `clarify_request_message(request_message, config_snapshot)` (строка 529)
     │           📝 Валидирует и корректирует значения в сообщении запроса.
-    │         ⚡ `run()` (строка 1083)
-    │         🏛️ `Audio2TextModels` (строка 44)
+    │         ⚡ `_format_config_timestamp(config_snapshot)` (строка 1108)
+    │         ⚡ `_stale_config_message(config_snapshot)` (строка 1112)
+    │         ⚡ `run()` (строка 1380)
+    │         🏛️ `Audio2TextModels` (строка 53)
     │           📝 Класс для выбора модели преобразования аудио в текст.
     └── 📁 **tests/** `/Users/user/github/FamilyFinanceProject/tests`
         ├── 📄 `test_dev_seed_simulation.py` - 1 класс(ов)
         │     📍 Путь: `tests/test_dev_seed_simulation.py`
-        │     🏛️ `DevSeedSimulationTests`(unittest.TestCase) (строка 14)
-        │       └─ `setUp(self)` (строка 15)
-        │       └─ `test_date_roundtrip(self)` (строка 32)
-        │       └─ `test_deterministic_simulation(self)` (строка 36)
-        │       └─ `test_adjustment_rules(self)` (строка 81)
-        │       └─ `test_generates_multiple_dates(self)` (строка 100)
-        │       └─ `test_salary_present(self)` (строка 111)
-        │       └─ `test_no_negative_ledger(self)` (строка 122)
-        │       └─ `test_expenses_and_transfers_present(self)` (строка 132)
+        │     🏛️ `DevSeedSimulationTests`(unittest.TestCase) (строка 17)
+        │       └─ `setUp(self)` (строка 18)
+        │       └─ `test_date_roundtrip(self)` (строка 35)
+        │       └─ `test_deterministic_simulation(self)` (строка 39)
+        │       └─ `test_adjustment_rules(self)` (строка 84)
+        │       └─ `test_generates_multiple_dates(self)` (строка 103)
+        │       └─ `test_salary_present(self)` (строка 114)
+        │       └─ `test_no_negative_ledger(self)` (строка 125)
+        │       └─ `test_expenses_and_transfers_present(self)` (строка 135)
+        │       └─ `test_apply_uses_fresh_batch_update_seam(self)` (строка 148)
         ├── 📄 `test_expense_reclassification_apply.py` - 1 класс(ов), 7 функций
         │     📍 Путь: `tests/test_expense_reclassification_apply.py`
         │     ⚡ `cell(value=None)` (строка 47)
@@ -505,71 +537,110 @@
         │       └─ `test_confirmed_response_success_reports_write_true_and_pause_ack(self)` (строка 499)
         │       └─ `test_apply_rejects_mapping_sha_without_confirmation_token(self)` (строка 536)
         │       └─ `test_apply_requires_confirmation_token_and_writers_pause(self)` (строка 540)
-        └── 📄 `test_expense_reclassification_preview.py` - 1 класс(ов), 5 функций
-              📍 Путь: `tests/test_expense_reclassification_preview.py`
-              ⚡ `cell(value=None, formatted=None, validation=None)` (строка 42)
-              ⚡ `operation(values, row=7)` (строка 55)
-              ⚡ `expense_operation(before, comment, date=1, amount=10, currency='EUR', row=7)` (строка 60)
-              ⚡ `rule_context(*operations, subscription_counts=None, same_day_comments=None)` (строка 64)
-              ⚡ `artifact_record(number, date, confidence, changed=True)` (строка 74)
-              🏛️ `PreviewPureFunctionTests`(unittest.TestCase) (строка 97)
-                └─ `test_unique_telegram_id_is_preferred(self)` (строка 98)
-                └─ `test_duplicate_telegram_id_falls_back_to_fingerprint(self)` (строка 107)
-                └─ `test_service_row_is_recognized_by_content(self)` (строка 116)
-                └─ `test_allowed_categories_are_deduplicated(self)` (строка 121)
-                └─ `test_lodging_word_boundary_does_not_match_trotelnik(self)` (строка 132)
-                └─ `test_mobile_rule_does_not_match_automobile(self)` (строка 135)
-                └─ `test_psychologist_for_driving_documents_is_not_therapy(self)` (строка 138)
-                └─ `test_psychology_webinar_is_education(self)` (строка 144)
-                └─ `test_beauty_in_health_is_reclassified(self)` (строка 149)
-                └─ `test_gym_food_is_products(self)` (строка 154)
-                └─ `test_markdown_escapes_pipes_and_newlines(self)` (строка 159)
-                └─ `test_tire_stem_does_not_match_inside_car_word(self)` (строка 162)
-                └─ `test_car_driving_authorization_is_not_maintenance(self)` (строка 170)
-                └─ `test_gifted_money_does_not_turn_hairbrush_into_gift(self)` (строка 178)
-                └─ `test_pull_and_bear_typo_is_clothing(self)` (строка 184)
-                └─ `test_orthopedic_insoles_are_health(self)` (строка 189)
-                └─ `test_animal_consultation_about_does_not_match_leash(self)` (строка 194)
-                └─ `test_nextgard_is_veterinary(self)` (строка 199)
-                └─ `test_blank_animal_comment_uses_medium_same_day_context(self)` (строка 202)
-                └─ `test_ip_must_be_standalone_in_subscription_business_rule(self)` (строка 211)
-                └─ `test_explicit_subscription_for_ip_uses_business_rule(self)` (строка 220)
-                └─ `test_home_specific_items_outrank_clothing_hints(self)` (строка 228)
-                └─ `test_therapeutic_shampoo_stays_in_health(self)` (строка 241)
-                └─ `test_color_adjective_is_not_a_flower_gift(self)` (строка 247)
-                └─ `test_mixed_home_carts_are_review(self)` (строка 258)
-                └─ `test_home_unknown_or_shop_only_comment_is_review(self)` (строка 272)
-                └─ `test_home_specific_subjects_override_default(self)` (строка 280)
-                └─ `test_personal_subscription_uses_cross_category_history(self)` (строка 291)
-                └─ `test_single_personal_subscription_is_not_high_confidence_monthly(self)` (строка 301)
-                └─ `test_spaced_cyrillic_vdsina_joins_recurring_series(self)` (строка 310)
-                └─ `test_repeated_kling_forgotten_subscription_is_monthly(self)` (строка 319)
-                └─ `test_sport_subscription_uses_subject_category(self)` (строка 328)
-                └─ `test_settings_lists_are_parsed_independently(self)` (строка 334)
-                └─ `test_settings_parser_requires_exactly_two_headers(self)` (строка 346)
-                └─ `test_regression_ids_require_exact_cardinality(self)` (строка 351)
-                └─ `test_runtime_artifact_validator_detects_markdown_drift(self)` (строка 372)
-                └─ `test_cable_routing_is_not_sanitary_pad_self_care(self)` (строка 392)
-                └─ `test_ambiguous_gel_home_purchase_is_review(self)` (строка 403)
-                └─ `test_animal_food_with_secondary_item_is_mixed_review(self)` (строка 408)
-                └─ `test_home_mixed_care_items_are_review(self)` (строка 419)
-                └─ `test_birthday_trampoline_series_is_entertainment(self)` (строка 426)
-                └─ `test_yandex_disk_spellings_share_monthly_history(self)` (строка 433)
-                └─ `test_apple_and_icloud_share_monthly_history(self)` (строка 443)
-                └─ `test_subscription_context_spelling_aliases_join_history(self)` (строка 460)
-                └─ `test_ambiguous_home_comments_and_specific_care(self)` (строка 479)
-                └─ `test_home_unknown_shampoo_and_hair_ties_are_review(self)` (строка 489)
-                └─ `test_other_unreal_and_decor_are_review_candidates(self)` (строка 496)
-                └─ `test_entertainment_app_subscriptions_are_reclassified(self)` (строка 503)
-                └─ `test_non_event_apartments_are_lodging(self)` (строка 510)
-                └─ `test_non_event_cottage_genitive_is_lodging(self)` (строка 518)
-                └─ `test_entertainment_explicit_products_and_steam_game(self)` (строка 524)
-                └─ `test_approved_glasses_override_gift_word(self)` (строка 533)
-                └─ `test_user_approved_override_uses_only_stable_identity(self)` (строка 547)
-                └─ `test_user_approved_override_requires_exact_cardinality(self)` (строка 559)
-                └─ `test_blank_printing_is_user_approved_other(self)` (строка 571)
-                └─ `test_explicit_printing_subject_still_routes_by_subject(self)` (строка 579)
-                └─ `test_parking_and_toll_use_renamed_category(self)` (строка 591)
+        ├── 📄 `test_expense_reclassification_preview.py` - 1 класс(ов), 5 функций
+        │     📍 Путь: `tests/test_expense_reclassification_preview.py`
+        │     ⚡ `cell(value=None, formatted=None, validation=None)` (строка 42)
+        │     ⚡ `operation(values, row=7)` (строка 55)
+        │     ⚡ `expense_operation(before, comment, date=1, amount=10, currency='EUR', row=7)` (строка 60)
+        │     ⚡ `rule_context(*operations, subscription_counts=None, same_day_comments=None)` (строка 64)
+        │     ⚡ `artifact_record(number, date, confidence, changed=True)` (строка 74)
+        │     🏛️ `PreviewPureFunctionTests`(unittest.TestCase) (строка 97)
+        │       └─ `test_unique_telegram_id_is_preferred(self)` (строка 98)
+        │       └─ `test_duplicate_telegram_id_falls_back_to_fingerprint(self)` (строка 107)
+        │       └─ `test_service_row_is_recognized_by_content(self)` (строка 116)
+        │       └─ `test_allowed_categories_are_deduplicated(self)` (строка 121)
+        │       └─ `test_lodging_word_boundary_does_not_match_trotelnik(self)` (строка 132)
+        │       └─ `test_mobile_rule_does_not_match_automobile(self)` (строка 135)
+        │       └─ `test_psychologist_for_driving_documents_is_not_therapy(self)` (строка 138)
+        │       └─ `test_psychology_webinar_is_education(self)` (строка 144)
+        │       └─ `test_beauty_in_health_is_reclassified(self)` (строка 149)
+        │       └─ `test_gym_food_is_products(self)` (строка 154)
+        │       └─ `test_markdown_escapes_pipes_and_newlines(self)` (строка 159)
+        │       └─ `test_tire_stem_does_not_match_inside_car_word(self)` (строка 162)
+        │       └─ `test_car_driving_authorization_is_not_maintenance(self)` (строка 170)
+        │       └─ `test_gifted_money_does_not_turn_hairbrush_into_gift(self)` (строка 178)
+        │       └─ `test_pull_and_bear_typo_is_clothing(self)` (строка 184)
+        │       └─ `test_orthopedic_insoles_are_health(self)` (строка 189)
+        │       └─ `test_animal_consultation_about_does_not_match_leash(self)` (строка 194)
+        │       └─ `test_nextgard_is_veterinary(self)` (строка 199)
+        │       └─ `test_blank_animal_comment_uses_medium_same_day_context(self)` (строка 202)
+        │       └─ `test_ip_must_be_standalone_in_subscription_business_rule(self)` (строка 211)
+        │       └─ `test_explicit_subscription_for_ip_uses_business_rule(self)` (строка 220)
+        │       └─ `test_home_specific_items_outrank_clothing_hints(self)` (строка 228)
+        │       └─ `test_therapeutic_shampoo_stays_in_health(self)` (строка 241)
+        │       └─ `test_color_adjective_is_not_a_flower_gift(self)` (строка 247)
+        │       └─ `test_mixed_home_carts_are_review(self)` (строка 258)
+        │       └─ `test_home_unknown_or_shop_only_comment_is_review(self)` (строка 272)
+        │       └─ `test_home_specific_subjects_override_default(self)` (строка 280)
+        │       └─ `test_personal_subscription_uses_cross_category_history(self)` (строка 291)
+        │       └─ `test_single_personal_subscription_is_not_high_confidence_monthly(self)` (строка 301)
+        │       └─ `test_spaced_cyrillic_vdsina_joins_recurring_series(self)` (строка 310)
+        │       └─ `test_repeated_kling_forgotten_subscription_is_monthly(self)` (строка 319)
+        │       └─ `test_sport_subscription_uses_subject_category(self)` (строка 328)
+        │       └─ `test_settings_lists_are_parsed_independently(self)` (строка 334)
+        │       └─ `test_settings_parser_requires_exactly_two_headers(self)` (строка 346)
+        │       └─ `test_regression_ids_require_exact_cardinality(self)` (строка 351)
+        │       └─ `test_runtime_artifact_validator_detects_markdown_drift(self)` (строка 372)
+        │       └─ `test_cable_routing_is_not_sanitary_pad_self_care(self)` (строка 392)
+        │       └─ `test_ambiguous_gel_home_purchase_is_review(self)` (строка 403)
+        │       └─ `test_animal_food_with_secondary_item_is_mixed_review(self)` (строка 408)
+        │       └─ `test_home_mixed_care_items_are_review(self)` (строка 419)
+        │       └─ `test_birthday_trampoline_series_is_entertainment(self)` (строка 426)
+        │       └─ `test_yandex_disk_spellings_share_monthly_history(self)` (строка 433)
+        │       └─ `test_apple_and_icloud_share_monthly_history(self)` (строка 443)
+        │       └─ `test_subscription_context_spelling_aliases_join_history(self)` (строка 460)
+        │       └─ `test_ambiguous_home_comments_and_specific_care(self)` (строка 479)
+        │       └─ `test_home_unknown_shampoo_and_hair_ties_are_review(self)` (строка 489)
+        │       └─ `test_other_unreal_and_decor_are_review_candidates(self)` (строка 496)
+        │       └─ `test_entertainment_app_subscriptions_are_reclassified(self)` (строка 503)
+        │       └─ `test_non_event_apartments_are_lodging(self)` (строка 510)
+        │       └─ `test_non_event_cottage_genitive_is_lodging(self)` (строка 518)
+        │       └─ `test_entertainment_explicit_products_and_steam_game(self)` (строка 524)
+        │       └─ `test_approved_glasses_override_gift_word(self)` (строка 533)
+        │       └─ `test_user_approved_override_uses_only_stable_identity(self)` (строка 547)
+        │       └─ `test_user_approved_override_requires_exact_cardinality(self)` (строка 559)
+        │       └─ `test_blank_printing_is_user_approved_other(self)` (строка 571)
+        │       └─ `test_explicit_printing_subject_still_routes_by_subject(self)` (строка 579)
+        │       └─ `test_parking_and_toll_use_renamed_category(self)` (строка 591)
+        ├── 📄 `test_finance_config_runtime.py` - 2 класс(ов), 1 функций
+        │     📍 Путь: `tests/test_finance_config_runtime.py`
+        │     ⚡ `snapshot(name)` (строка 21)
+        │     🏛️ `FinanceConfigCacheTests`(unittest.TestCase) (строка 30)
+        │       └─ `test_snapshot_is_immutable(self)` (строка 31)
+        │       └─ `test_ttl_uses_monotonic_clock_and_replaces_snapshot_atomically(self)` (строка 37)
+        │       └─ `test_failed_refresh_returns_last_known_good_snapshot(self)` (строка 63)
+        │       └─ `test_failed_initial_load_raises_typed_error(self)` (строка 83)
+        │       └─ `test_concurrent_cache_miss_loads_once(self)` (строка 93)
+        │     🏛️ `GoogleReadExecutionTests`(unittest.TestCase) (строка 114)
+        │       └─ `test_transient_timeout_retries_with_fresh_service(self)` (строка 115)
+        │       └─ `test_http_408_429_and_5xx_are_transient(self)` (строка 161)
+        │       └─ `test_non_transient_error_is_not_retried(self)` (строка 176)
+        │       └─ `test_transient_read_failure_stops_after_three_attempts(self)` (строка 191)
+        │       └─ `test_write_does_not_retry_ambiguous_timeout(self)` (строка 214)
+        │       └─ `test_write_factory_failure_is_not_marked_as_unknown(self)` (строка 229)
+        │       └─ `test_delete_propagates_read_failure(self)` (строка 238)
+        │       └─ `test_delete_propagates_ambiguous_write_without_retry(self)` (строка 252)
+        │       └─ `test_credentials_are_loaded_once_for_fresh_services(self)` (строка 274)
+        │       └─ `test_snapshot_loader_uses_one_batch_get(self)` (строка 303)
+        │       └─ `test_snapshot_loader_rejects_partial_batch_response(self)` (строка 330)
+        │       └─ `test_snapshot_loader_rejects_malformed_values_and_wrong_range(self)` (строка 346)
+        │       └─ `test_snapshot_loader_rejects_empty_config_ranges(self)` (строка 378)
+        └── 📄 `test_voice_runtime.py` - 7 класс(ов), 1 функций
+              📍 Путь: `tests/test_voice_runtime.py`
+              ⚡ `config_snapshot()` (строка 23)
+              🏛️ `FinanceSnapshotPlumbingTests`(unittest.TestCase) (строка 32)
+                └─ `test_whisper_prompt_uses_passed_snapshot(self)` (строка 33)
+                └─ `test_response_formats_keep_passed_snapshot(self)` (строка 48)
+                └─ `test_validation_uses_passed_snapshot(self)` (строка 66)
+              🏛️ `OperationTrackingIdTests`(unittest.TestCase) (строка 82)
+                └─ `test_same_source_message_in_different_chats_does_not_collide(self)` (строка 83)
+                └─ `test_long_components_use_stable_callback_safe_id(self)` (строка 91)
+              🏛️ `AudioLifecycleTests`(unittest.IsolatedAsyncioTestCase) (строка 111)
+              🏛️ `TelegramDownloadLifecycleTests`(unittest.IsolatedAsyncioTestCase) (строка 314)
+              🏛️ `BotInitializationTests`(unittest.IsolatedAsyncioTestCase) (строка 418)
+              🏛️ `WriteReconciliationTests`(unittest.IsolatedAsyncioTestCase) (строка 518)
+                └─ `request(self, tracking_id='123-1')` (строка 519)
+              🏛️ `VoiceOperationSnapshotTests`(unittest.IsolatedAsyncioTestCase) (строка 704)
 ```
 
 ## Легенда
@@ -587,17 +658,17 @@
 
 ## Статистика проекта
 
-- **Всего файлов:** 60
-- **Python файлов:** 22
-- **Строк кода:** 335,357
-- **Классов:** 37
-- **Функций:** 249
-- **Методов:** 116
+- **Всего файлов:** 63
+- **Python файлов:** 24
+- **Строк кода:** 337,998
+- **Классов:** 51
+- **Функций:** 272
+- **Методов:** 143
 
 ### Распределение файлов по типам:
 - `.md`: 26 файлов
-- `.py`: 22 файлов
-- `.json`: 3 файлов
+- `.py`: 24 файлов
+- `.json`: 4 файлов
 - `.sh`: 3 файлов
 - `.yml`: 2 файлов
 - `.toml`: 1 файлов

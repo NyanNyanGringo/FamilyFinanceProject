@@ -1,20 +1,27 @@
-import logging
-
+import errno
 import os
-from datetime import datetime, timedelta
+import socket
+import ssl
+import threading
+import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from enum import Enum
-from typing import Union, Optional
+from typing import Callable, Optional, Union
 
 from dotenv import load_dotenv
+import google_auth_httplib2
+import httplib2
 from pydantic import BaseModel, Field
 
+from google.auth.exceptions import TransportError
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from lib.utilities.date_utilities import get_google_sheets_current_date
 from config import GOOGLE_SCOPES
 from lib.utilities.os_utilities import _get_root_path
-from googleapiclient.errors import HttpError
 
 
 # LOGGING
@@ -41,6 +48,27 @@ def _get_spreadsheet_id() -> str:
 
 SPREADSHEET_ID = _get_spreadsheet_id()
 
+GOOGLE_READ_ATTEMPTS = 3
+GOOGLE_READ_RETRY_DELAYS = (0.5, 1.0)
+GOOGLE_READ_TIMEOUT_SECONDS = 5
+GOOGLE_WRITE_TIMEOUT_SECONDS = 30
+FINANCE_CONFIG_TTL_SECONDS = 5 * 60
+TRANSIENT_NETWORK_ERRNOS = {
+    errno.ECONNABORTED,
+    errno.ECONNREFUSED,
+    errno.ECONNRESET,
+    errno.EHOSTUNREACH,
+    errno.ENETDOWN,
+    errno.ENETRESET,
+    errno.ENETUNREACH,
+    errno.EPIPE,
+    errno.ETIMEDOUT,
+}
+
+
+class GoogleWriteOutcomeUnknownError(RuntimeError):
+    pass
+
 
 def _authenticate_with_google():
     """
@@ -59,40 +87,160 @@ def _authenticate_with_google():
     return creds
 
 
-def _get_sheet_ids() -> dict:
+_CREDENTIALS = None
+_CREDENTIALS_LOCK = threading.Lock()
+_GOOGLE_REQUEST_LOCK = threading.Lock()
+
+
+def _get_credentials():
+    global _CREDENTIALS
+
+    with _CREDENTIALS_LOCK:
+        if _CREDENTIALS is None:
+            _CREDENTIALS = _authenticate_with_google()
+        return _CREDENTIALS
+
+
+def _build_service(timeout_seconds: int):
+    credentials = _get_credentials()
+    transport = httplib2.Http(timeout=timeout_seconds)
+    authorized_transport = google_auth_httplib2.AuthorizedHttp(
+        credentials,
+        http=transport,
+    )
+    return build(
+        "sheets",
+        "v4",
+        http=authorized_transport,
+        cache_discovery=False,
+    )
+
+
+def _close_service(service) -> None:
+    close = getattr(service, "close", None)
+    if callable(close):
+        try:
+            close()
+        except Exception:
+            LOGGER.exception("Failed to close Google Sheets transport")
+
+
+def _is_transient_google_error(error: Exception) -> bool:
+    if isinstance(error, HttpError):
+        status = getattr(error.resp, "status", None)
+        return status in {408, 429} or (status is not None and 500 <= status < 600)
+
+    if isinstance(error, OSError) and error.errno in TRANSIENT_NETWORK_ERRNOS:
+        return True
+
+    return isinstance(
+        error,
+        (
+            ConnectionError,
+            TransportError,
+            TimeoutError,
+            httplib2.ProxiesUnavailableError,
+            httplib2.ServerNotFoundError,
+            socket.gaierror,
+            socket.timeout,
+            ssl.SSLError,
+        ),
+    )
+
+
+def _execute_read(request_factory: Callable, attempts: int = GOOGLE_READ_ATTEMPTS):
+    for attempt in range(attempts):
+        service = None
+        try:
+            with _GOOGLE_REQUEST_LOCK:
+                service = _build_service(GOOGLE_READ_TIMEOUT_SECONDS)
+                request = request_factory(service)
+                return request.execute(num_retries=0)
+        except Exception as error:
+            last_attempt = attempt == attempts - 1
+            if last_attempt or not _is_transient_google_error(error):
+                raise
+
+            delay_index = min(attempt, len(GOOGLE_READ_RETRY_DELAYS) - 1)
+            delay = GOOGLE_READ_RETRY_DELAYS[delay_index]
+            LOGGER.warning(
+                "Transient Google Sheets read failure. Retry %s/%s in %.1fs: %s",
+                attempt + 2,
+                attempts,
+                delay,
+                error,
+            )
+            time.sleep(delay)
+        finally:
+            if service is not None:
+                _close_service(service)
+
+    raise RuntimeError("Google Sheets read retry loop ended unexpectedly")
+
+
+def _execute_write(request_factory: Callable):
+    service = None
+    try:
+        with _GOOGLE_REQUEST_LOCK:
+            service = _build_service(GOOGLE_WRITE_TIMEOUT_SECONDS)
+            request = request_factory(service)
+            try:
+                return request.execute(num_retries=0)
+            except Exception as error:
+                if _is_transient_google_error(error):
+                    raise GoogleWriteOutcomeUnknownError(
+                        "Google Sheets write outcome is unknown"
+                    ) from error
+                raise
+    finally:
+        if service is not None:
+            _close_service(service)
+
+
+_SHEET_IDS_LOCK = threading.Lock()
+_SHEETS_IDS = None
+
+
+def _get_sheet_ids(force_refresh: bool = False) -> dict:
     """
     Получает идентификаторы всех листов в Google Spreadsheet.
 
     Returns:
         dict: Словарь с названиями листов и их идентификаторами.
     """
-    request = _SERVICE.spreadsheets().get(spreadsheetId=SPREADSHEET_ID)
-    response = request.execute()
+    global _SHEETS_IDS
 
-    sheet_ids = {}
-    for sheet in (sheets := response.get('sheets', [])):
-        title = sheet.get('properties', {}).get('title', 'No title found')
-        sheet_id = sheet.get('properties', {}).get('sheetId', 'No ID found')
+    with _SHEET_IDS_LOCK:
+        if _SHEETS_IDS is not None and not force_refresh:
+            return _SHEETS_IDS.copy()
 
-        sheet_ids[title] = sheet_id
+        response = _execute_read(
+            lambda service: service.spreadsheets().get(
+                spreadsheetId=SPREADSHEET_ID,
+                fields="sheets(properties(sheetId,title))",
+            )
+        )
+        sheet_ids = {
+            sheet.get("properties", {}).get("title"): sheet.get("properties", {}).get("sheetId")
+            for sheet in response.get("sheets", [])
+            if sheet.get("properties", {}).get("title") is not None
+        }
+        _SHEETS_IDS = sheet_ids
 
-    LOGGER.info(f"Sheet IDs: {sheet_ids}")
-    
-    # Подробное логирование для отладки
-    for name, id in sheet_ids.items():
-        LOGGER.info(f"Sheet: '{name}', ID: {id}")
-
-    return sheet_ids
+    LOGGER.info("Loaded %s Google Sheet IDs", len(sheet_ids))
+    return sheet_ids.copy()
 
 
 def _get_sheet_row_count(list_name) -> int:
     """
     Возвращает количество строк листа по его названию.
     """
-    response = _SERVICE.spreadsheets().get(
-        spreadsheetId=SPREADSHEET_ID,
-        fields="sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))"
-    ).execute()
+    response = _execute_read(
+        lambda service: service.spreadsheets().get(
+            spreadsheetId=SPREADSHEET_ID,
+            fields="sheets(properties(sheetId,title,gridProperties(rowCount,columnCount)))",
+        )
+    )
     for sheet in response.get("sheets", []):
         props = sheet.get("properties", {})
         if props.get("title") == str(list_name):
@@ -107,23 +255,21 @@ def ensure_min_rows(list_name, min_rows: int = 7) -> None:
     row_count = _get_sheet_row_count(list_name)
     if row_count >= min_rows:
         return
+    sheet_ids = _get_sheet_ids()
     append_request = {
         "appendDimension": {
-            "sheetId": _SHEETS_IDS.get(list_name),
+            "sheetId": sheet_ids.get(str(list_name)),
             "dimension": "ROWS",
             "length": min_rows - row_count,
         }
     }
-    _SERVICE.spreadsheets().batchUpdate(
-        spreadsheetId=SPREADSHEET_ID,
-        body={"requests": [append_request]}
-    ).execute()
+    _execute_write(
+        lambda service: service.spreadsheets().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body={"requests": [append_request]},
+        )
+    )
     LOGGER.info(f"Extended sheet {list_name} rows from {row_count} to {min_rows}")
-
-
-_CREDS = _authenticate_with_google()
-_SERVICE = build("sheets", "v4", credentials=_CREDS)
-_SHEETS_IDS = _get_sheet_ids()
 
 
 class _GoogleBaseEnumClass(Enum):
@@ -145,56 +291,177 @@ class _GoogleBaseEnumClass(Enum):
         raise ValueError(f"{value} is not a valid value for {cls.__name__}")
 
 
+@dataclass(frozen=True)
+class FinanceConfigSnapshot:
+    expenses: tuple[str, ...]
+    incomes: tuple[str, ...]
+    accounts: tuple[str, ...]
+    loaded_at: datetime
+
+
+@dataclass(frozen=True)
+class FinanceConfigResult:
+    snapshot: FinanceConfigSnapshot
+    used_stale: bool = False
+    refresh_error: Optional[str] = None
+
+
+class FinanceConfigUnavailableError(RuntimeError):
+    pass
+
+
+def _single_column_values(value_range: dict) -> tuple[str, ...]:
+    values = []
+    for row in value_range.get("values", []):
+        if not isinstance(row, list):
+            raise ValueError("Finance configuration row must be a list")
+        if not row or row[0] in {None, ""}:
+            continue
+        if not isinstance(row[0], str):
+            raise ValueError("Finance configuration value must be a string")
+        values.append(row[0])
+    return tuple(values)
+
+
+def _normalize_a1_range(range_name: str) -> str:
+    sheet_name, cells = range_name.split("!", maxsplit=1)
+    normalized_sheet_name = sheet_name.strip("'")
+    return f"{normalized_sheet_name}!{cells.upper()}"
+
+
+def _load_finance_config_snapshot() -> FinanceConfigSnapshot:
+    ranges = [
+        str(ConfigRange.expenses),
+        str(ConfigRange.incomes),
+        str(ConfigRange.accounts),
+    ]
+    response = _execute_read(
+        lambda service: service.spreadsheets().values().batchGet(
+            spreadsheetId=SPREADSHEET_ID,
+            ranges=ranges,
+        )
+    )
+    if not isinstance(response, dict):
+        raise ValueError("Google Sheets returned an invalid finance configuration payload")
+    value_ranges = response.get("valueRanges", [])
+    if not isinstance(value_ranges, list):
+        raise ValueError("Google Sheets valueRanges must be a list")
+    if len(value_ranges) != len(ranges):
+        raise ValueError(
+            f"Expected {len(ranges)} finance config ranges, got {len(value_ranges)}"
+        )
+
+    for expected_range, value_range in zip(ranges, value_ranges):
+        if not isinstance(value_range, dict):
+            raise ValueError("Google Sheets valueRange must be an object")
+        actual_range = value_range.get("range")
+        if actual_range and _normalize_a1_range(actual_range) != _normalize_a1_range(
+            expected_range
+        ):
+            raise ValueError(
+                f"Expected finance config range {expected_range}, got {actual_range}"
+            )
+
+    expenses, incomes, accounts = map(_single_column_values, value_ranges)
+    if not expenses or not incomes or not accounts:
+        raise ValueError("Google Sheets returned an incomplete finance configuration")
+
+    return FinanceConfigSnapshot(
+        expenses=expenses,
+        incomes=incomes,
+        accounts=accounts,
+        loaded_at=datetime.now(timezone.utc),
+    )
+
+
+class FinanceConfigCache:
+    def __init__(
+        self,
+        loader: Callable[[], FinanceConfigSnapshot] = _load_finance_config_snapshot,
+        ttl_seconds: float = FINANCE_CONFIG_TTL_SECONDS,
+        monotonic: Callable[[], float] = time.monotonic,
+    ):
+        self._loader = loader
+        self._ttl_seconds = ttl_seconds
+        self._monotonic = monotonic
+        self._lock = threading.Lock()
+        self._snapshot = None
+        self._loaded_monotonic = None
+
+    def get(self, force_refresh: bool = False) -> FinanceConfigResult:
+        with self._lock:
+            now = self._monotonic()
+            if not force_refresh and self._is_fresh(now):
+                return FinanceConfigResult(snapshot=self._snapshot)
+
+            try:
+                refreshed_snapshot = self._loader()
+            except Exception as error:
+                if self._snapshot is None:
+                    raise FinanceConfigUnavailableError(
+                        "Finance configuration has not been loaded"
+                    ) from error
+
+                LOGGER.exception(
+                    "Finance configuration refresh failed. Using last known good snapshot."
+                )
+                return FinanceConfigResult(
+                    snapshot=self._snapshot,
+                    used_stale=True,
+                    refresh_error=str(error),
+                )
+
+            self._snapshot = refreshed_snapshot
+            self._loaded_monotonic = self._monotonic()
+            LOGGER.info(
+                "Finance configuration refreshed: expenses=%s, incomes=%s, accounts=%s",
+                len(refreshed_snapshot.expenses),
+                len(refreshed_snapshot.incomes),
+                len(refreshed_snapshot.accounts),
+            )
+            return FinanceConfigResult(snapshot=refreshed_snapshot)
+
+    def _is_fresh(self, now: float) -> bool:
+        if self._snapshot is None or self._loaded_monotonic is None:
+            return False
+        return now - self._loaded_monotonic < self._ttl_seconds
+
+
+_FINANCE_CONFIG_CACHE = FinanceConfigCache()
+
+
+def get_finance_config() -> FinanceConfigResult:
+    return _FINANCE_CONFIG_CACHE.get()
+
+
+def reload_finance_config() -> FinanceConfigResult:
+    return _FINANCE_CONFIG_CACHE.get(force_refresh=True)
+
+
 class Category:
-    """
-    Класс для работы с категориями расходов, доходов и счетов.
-    """
-    _expenses = []  # категории расходов
-    _incomes = []  # категории доходов
-    _accounts = []  # счета
-    _last_update_time = None  # последнее обновление
+    """Compatibility facade for code that does not yet pass a snapshot."""
 
     def __init__(self):
-        raise RuntimeError("Создание экземпляров класса Category не допускается. "
-                           "Используйте методы и атрибуты напрямую.")
+        raise RuntimeError(
+            "Создание экземпляров класса Category не допускается. "
+            "Используйте методы и атрибуты напрямую."
+        )
 
     @classmethod
-    def get_expenses(cls):
-        cls._update()
-        return cls._expenses
+    def get_expenses(cls) -> list[str]:
+        return list(get_finance_config().snapshot.expenses)
 
     @classmethod
-    def get_incomes(cls):
-        cls._update()
-        return cls._incomes
+    def get_incomes(cls) -> list[str]:
+        return list(get_finance_config().snapshot.incomes)
 
     @classmethod
-    def get_accounts(cls) -> list:
-        cls._update()
-        return cls._accounts
+    def get_accounts(cls) -> list[str]:
+        return list(get_finance_config().snapshot.accounts)
 
     @classmethod
-    def force_update(cls):
-        """
-        Принудительно сбрасывает кэш и перечитывает данные из таблицы.
-        """
-        cls._last_update_time = None
-        cls._update()
-
-    @classmethod
-    def _update(cls):
-        LOGGER.info("Update started.")
-        if cls._last_update_time is None or datetime.now() - cls._last_update_time >= timedelta(minutes=5):
-            LOGGER.info("Updating categories...")  # Для демонстрации, что метод вызывается
-            cls._expenses = get_values(cell_range=ConfigRange.expenses, transform_to_single_list=True)
-            cls._incomes = get_values(cell_range=ConfigRange.incomes, transform_to_single_list=True)
-            cls._accounts = get_values(cell_range=ConfigRange.accounts, transform_to_single_list=True)
-            cls._last_update_time = datetime.now()
-            LOGGER.info(f"{cls._expenses=}")
-            LOGGER.info(f"{cls._incomes=}")
-            LOGGER.info(f"{cls._accounts=}")
-        else:
-            LOGGER.info("Update not required: Less than 5 minutes since the last update.")
+    def force_update(cls) -> FinanceConfigResult:
+        return reload_finance_config()
 
 
 class Formulas(str, _GoogleBaseEnumClass):
@@ -364,11 +631,11 @@ def get_values(cell_range: str or ConfigRange, transform_to_single_list: bool = 
     Returns:
         list: Список значений из Google Sheets.
     """
-    sheet = _SERVICE.spreadsheets()
-    result = (
-        sheet.values()
-        .get(spreadsheetId=SPREADSHEET_ID, range=cell_range)
-        .execute()
+    result = _execute_read(
+        lambda service: service.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=cell_range,
+        )
     )
     values = result.get("values", [])
 
@@ -394,13 +661,24 @@ def update_values(range_name: str, values: list[list], value_input_option: str =
     Returns:
         dict: Ответ от Google Sheets API.
     """
-    request = _SERVICE.spreadsheets().values().update(
-        spreadsheetId=SPREADSHEET_ID,
-        range=range_name,
-        valueInputOption=value_input_option,
-        body={"values": values},
+    return _execute_write(
+        lambda service: service.spreadsheets().values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=range_name,
+            valueInputOption=value_input_option,
+            body={"values": values},
+        )
     )
-    return request.execute()
+
+
+def batch_update(body: dict) -> dict:
+    """Executes one Google Sheets batchUpdate without automatic write retries."""
+    return _execute_write(
+        lambda service: service.spreadsheets().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body=body,
+        )
+    )
 
 
 def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) -> dict:
@@ -417,12 +695,16 @@ def get_insert_row_above_request(list_name:  ListName, insert_above_row: int) ->
     Raises:
         ValueError: Если ID листа не найден или равен 0.
     """
-    sheet_id = _SHEETS_IDS.get(list_name)
+    sheet_ids = _get_sheet_ids()
+    sheet_id = sheet_ids.get(str(list_name))
     
     # Подробное логирование для отладки
     if sheet_id is None or sheet_id == 0:
         # Если ID не найден или равен 0, выведем ошибку
-        raise ValueError(f"Invalid sheet ID {sheet_id} for list name '{list_name}'. Available sheets: {list(_SHEETS_IDS.keys())}")
+        raise ValueError(
+            f"Invalid sheet ID {sheet_id} for list name '{list_name}'. "
+            f"Available sheets: {list(sheet_ids.keys())}"
+        )
     
     insert_row_above_request = {
         "insertDimension": {
@@ -449,9 +731,10 @@ def get_update_cells_request(list_name: ListName, values_to_update: list, row_in
     Returns:
         dict: Запрос для обновления ячеек в формате Google Sheets API.
     """
+    sheet_ids = _get_sheet_ids()
     update_cells_request = {
         "updateCells": {
-            "start": {"sheetId": _SHEETS_IDS.get(list_name),
+            "start": {"sheetId": sheet_ids.get(str(list_name)),
                       "rowIndex": row_index,
                       "columnIndex": column_index},
             "rows": [{"values": values_to_update}],
@@ -530,6 +813,38 @@ def get_values_to_update_for_request(request_data: RequestData) -> list:
         return values_to_update
 
 
+def _telegram_id_column(list_name: ListName) -> str:
+    columns = {
+        ListName.expenses: "L",
+        ListName.transfers: "M",
+        ListName.incomes: "K",
+    }
+    try:
+        return columns[list_name]
+    except KeyError as error:
+        raise ValueError(f"Unsupported list name: {list_name}") from error
+
+
+def find_rows_by_telegram_id(
+    list_name: ListName,
+    telegram_message_id: str,
+) -> tuple[int, ...]:
+    column = _telegram_id_column(list_name)
+    range_name = f"{list_name}!{column}:${column}"
+    result = _execute_read(
+        lambda service: service.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=range_name,
+        )
+    )
+    expected_id = str(telegram_message_id)
+    return tuple(
+        row_index
+        for row_index, row in enumerate(result.get("values", []), start=1)
+        if row and str(row[0]) == expected_id
+    )
+
+
 def delete_row_by_telegram_id(list_name: ListName, telegram_message_id: str) -> bool:
     """
     Удаляет строку из Google Sheets по Telegram message ID.
@@ -541,65 +856,46 @@ def delete_row_by_telegram_id(list_name: ListName, telegram_message_id: str) -> 
     Returns:
         bool: True если строка найдена и удалена, False если не найдена.
     """
-    try:
-        # Определяем столбец с Telegram ID в зависимости от типа листа
-        if list_name == ListName.expenses:
-            column = 'L'
-        elif list_name == ListName.transfers:
-            column = 'M'
-        elif list_name == ListName.incomes:
-            column = 'K'
-        else:
-            LOGGER.error(f"Unsupported list name: {list_name}")
-            return False
-            
-        # Получаем все значения из столбца с Telegram IDs
-        range_name = f"{list_name}!{column}:${column}"
-        result = _SERVICE.spreadsheets().values().get(
-            spreadsheetId=SPREADSHEET_ID,
-            range=range_name
-        ).execute()
-        
-        values = result.get('values', [])
-        
-        # Ищем строку с нужным telegram_message_id
-        row_to_delete = None
-        for i, row in enumerate(values):
-            if row and row[0] == telegram_message_id:
-                row_to_delete = i + 1  # +1 так как индексация в Sheets начинается с 1
-                break
-                
-        if row_to_delete is None:
-            LOGGER.warning(f"Row with telegram_message_id {telegram_message_id} not found in {list_name}")
-            return False
-            
-        # Удаляем строку
-        delete_request = {
-            "deleteDimension": {
-                "range": {
-                    "sheetId": _SHEETS_IDS.get(list_name),
-                    "dimension": "ROWS",
-                    "startIndex": row_to_delete - 1,  # -1 так как API использует 0-based индексы
-                    "endIndex": row_to_delete
-                }
+    matching_rows = find_rows_by_telegram_id(list_name, telegram_message_id)
+    if not matching_rows:
+        LOGGER.warning(f"Row with telegram_message_id {telegram_message_id} not found in {list_name}")
+        return False
+    if len(matching_rows) > 1:
+        LOGGER.error(
+            "Refusing to delete duplicate telegram_message_id %s from %s: rows=%s",
+            telegram_message_id,
+            list_name,
+            matching_rows,
+        )
+        return False
+
+    row_to_delete = matching_rows[0]
+
+    delete_request = {
+        "deleteDimension": {
+            "range": {
+                "sheetId": _get_sheet_ids().get(str(list_name)),
+                "dimension": "ROWS",
+                "startIndex": row_to_delete - 1,
+                "endIndex": row_to_delete,
             }
         }
-        
-        batch_update_request = {
-            "requests": [delete_request]
-        }
-        
-        response = _SERVICE.spreadsheets().batchUpdate(
+    }
+
+    _execute_write(
+        lambda service: service.spreadsheets().batchUpdate(
             spreadsheetId=SPREADSHEET_ID,
-            body=batch_update_request
-        ).execute()
-        
-        LOGGER.info(f"Successfully deleted row {row_to_delete} with telegram_message_id {telegram_message_id} from {list_name}")
-        return True
-        
-    except Exception as e:
-        LOGGER.error(f"Error deleting row by telegram_message_id: {e}")
-        return False
+            body={"requests": [delete_request]},
+        )
+    )
+
+    LOGGER.info(
+        "Successfully deleted row %s with telegram_message_id %s from %s",
+        row_to_delete,
+        telegram_message_id,
+        list_name,
+    )
+    return True
 
 
 def insert_and_update_row_batch_update(request_data: RequestData):
@@ -627,8 +923,12 @@ def insert_and_update_row_batch_update(request_data: RequestData):
 
     body = {"requests": [insert_row_request, update_cells_request]}
 
-    request = _SERVICE.spreadsheets().batchUpdate(spreadsheetId=SPREADSHEET_ID, body=body)
-    response = request.execute()
+    response = _execute_write(
+        lambda service: service.spreadsheets().batchUpdate(
+            spreadsheetId=SPREADSHEET_ID,
+            body=body,
+        )
+    )
 
     LOGGER.info(f"{response=}")
 
@@ -650,10 +950,12 @@ def reset_input_sheet_preserve_template(list_name: ListName) -> None:
         return
 
     range_name = f"{list_name}!A7:A{row_count}"
-    result = _SERVICE.spreadsheets().values().get(
-        spreadsheetId=SPREADSHEET_ID,
-        range=range_name
-    ).execute()
+    result = _execute_read(
+        lambda service: service.spreadsheets().values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=range_name,
+        )
+    )
     values = result.get("values", [])
 
     rows_to_delete = len(values)
@@ -664,7 +966,7 @@ def reset_input_sheet_preserve_template(list_name: ListName) -> None:
     delete_request = {
         "deleteDimension": {
             "range": {
-                "sheetId": _SHEETS_IDS.get(list_name),
+                "sheetId": _get_sheet_ids().get(str(list_name)),
                 "dimension": "ROWS",
                 "startIndex": 6,
                 "endIndex": 6 + rows_to_delete
@@ -674,10 +976,12 @@ def reset_input_sheet_preserve_template(list_name: ListName) -> None:
 
     body = {"requests": [delete_request]}
     try:
-        _SERVICE.spreadsheets().batchUpdate(
-            spreadsheetId=SPREADSHEET_ID,
-            body=body
-        ).execute()
+        _execute_write(
+            lambda service: service.spreadsheets().batchUpdate(
+                spreadsheetId=SPREADSHEET_ID,
+                body=body,
+            )
+        )
         LOGGER.info(f"Reset {rows_to_delete} rows on sheet {list_name}, template preserved.")
     except HttpError as e:
         message = str(e)
@@ -693,10 +997,12 @@ def reset_input_sheet_preserve_template(list_name: ListName) -> None:
                 "to avoid deleting all non-frozen rows."
             )
             delete_request["deleteDimension"]["range"]["endIndex"] = 6 + adjusted_delete
-            _SERVICE.spreadsheets().batchUpdate(
-                spreadsheetId=SPREADSHEET_ID,
-                body={"requests": [delete_request]}
-            ).execute()
+            _execute_write(
+                lambda service: service.spreadsheets().batchUpdate(
+                    spreadsheetId=SPREADSHEET_ID,
+                    body={"requests": [delete_request]},
+                )
+            )
             LOGGER.info(f"Reset {adjusted_delete} rows on sheet {list_name}, template preserved (adjusted).")
         else:
             LOGGER.error(f"Failed to reset sheet {list_name}: {e}")
@@ -757,13 +1063,14 @@ def add_memory(memory_text: str) -> bool:
         }
         
         cell_range = f"{ListName.memory}!A1"
-        request = _SERVICE.spreadsheets().values().update(
-            spreadsheetId=SPREADSHEET_ID,
-            range=cell_range,
-            valueInputOption="RAW",
-            body=body
+        _execute_write(
+            lambda service: service.spreadsheets().values().update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=cell_range,
+                valueInputOption="RAW",
+                body=body,
+            )
         )
-        response = request.execute()
         
         LOGGER.info(f"Воспоминание добавлено: {memory_text}")
         return True
@@ -798,13 +1105,14 @@ def delete_memory(memory_index: int) -> bool:
         }
         
         cell_range = f"{ListName.memory}!A1"
-        request = _SERVICE.spreadsheets().values().update(
-            spreadsheetId=SPREADSHEET_ID,
-            range=cell_range,
-            valueInputOption="RAW",
-            body=body
+        _execute_write(
+            lambda service: service.spreadsheets().values().update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=cell_range,
+                valueInputOption="RAW",
+                body=body,
+            )
         )
-        response = request.execute()
         
         LOGGER.info(f"Воспоминание удалено: {deleted_memory}")
         return True
